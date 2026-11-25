@@ -1,0 +1,152 @@
+# Compila Riky Piano Man su GitHub a ogni aggiornamento del ramo main:
+#  - Linux: prova del motore con il vero Maestro Concert Grand (intonazione, pedali, rilasci, 88 tasti, PANIC)
+#  - Mac: VST3 + AU + app, Intel e Apple Silicon compilati a parte e uniti con lipo, firma ad hoc, controllo con pluginval
+#  - Windows: VST3 + app (x64)
+# I file pronti vengono pubblicati nella pagina "Releases" del repository: non serve scaricare i sorgenti.
+name: build
+
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PRODUCT: Riky Piano Man
+
+jobs:
+  prova:
+    name: Prova del motore (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Librerie di sistema per JUCE
+        run: sudo apt-get update -q && sudo apt-get install -y -q libfreetype-dev libfontconfig1-dev libasound2-dev libcurl4-openssl-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxext-dev libxi-dev libxcomposite-dev libxrender-dev
+      - name: Configura
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRIKY_BUILD_TOOLS=ON
+      - name: Compila lo strumento di prova
+        run: cmake --build build --target riky_render -j4
+      - name: Scarica il Maestro Concert Grand (repository ufficiale, versione fissata)
+        run: |
+          git clone -q https://github.com/sfzinstruments/MatsHelgesson.MaestroConcertGrandPiano maestro
+          git -C maestro checkout -q 717078b450eccc4a7733755f4b5973426ebc23e9
+      - name: Prova (intonazione, 432 Hz, trasposizione, velocity, pedali, rumori di rilascio, 88 tasti, PANIC)
+        run: ./build/riky_render_artefacts/Release/riky_render "maestro/Maestro Concert Grand.sfz" prova.wav
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prova-audio
+          path: prova.wav
+          retention-days: 7
+
+  mac:
+    name: macOS (Intel + Apple Silicon)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compila per Intel (x86_64)
+        run: |
+          cmake -S . -B build-x64 -G Xcode -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+          cmake --build build-x64 --config Release --target RikyPianoMan_VST3 RikyPianoMan_AU RikyPianoMan_Standalone -- -quiet
+      - name: Compila per Apple Silicon (arm64)
+        run: |
+          cmake -S . -B build-arm -G Xcode -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+          cmake --build build-arm --config Release --target RikyPianoMan_VST3 RikyPianoMan_AU RikyPianoMan_Standalone -- -quiet
+      - name: Unisci in binari universali, firma ad hoc e comprimi
+        run: |
+          set -e
+          X="build-x64/RikyPianoMan_artefacts/Release"
+          A="build-arm/RikyPianoMan_artefacts/Release"
+          mkdir -p dist
+          for b in "VST3/$PRODUCT.vst3" "AU/$PRODUCT.component" "Standalone/$PRODUCT.app"; do
+            mkdir -p "dist/$(dirname "$b")"
+            ditto "$A/$b" "dist/$b"
+            lipo -create "$X/$b/Contents/MacOS/$PRODUCT" "$A/$b/Contents/MacOS/$PRODUCT" -output "dist/$b/Contents/MacOS/$PRODUCT"
+            lipo -info "dist/$b/Contents/MacOS/$PRODUCT"
+            codesign --force --deep -s - "dist/$b"
+          done
+          cd dist
+          ditto -c -k --keepParent "VST3/$PRODUCT.vst3"      "RikyPianoMan-VST3-mac.zip"
+          ditto -c -k --keepParent "AU/$PRODUCT.component"   "RikyPianoMan-AU-mac.zip"
+          ditto -c -k --keepParent "Standalone/$PRODUCT.app" "RikyPianoMan-App-mac.zip"
+      - name: Controllo con pluginval
+        run: |
+          curl -sSL -o pv.zip https://github.com/Tracktion/pluginval/releases/download/v1.0.4/pluginval_macOS.zip
+          unzip -q pv.zip
+          ./pluginval.app/Contents/MacOS/pluginval --strictness-level 10 --validate-in-process --skip-gui-tests "dist/VST3/$PRODUCT.vst3"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac
+          path: dist/*.zip
+
+  windows:
+    name: Windows x64
+    runs-on: windows-latest
+    steps:
+      - name: Percorsi lunghi per i sottomoduli di sfizz
+        run: git config --system core.longpaths true
+      - uses: actions/checkout@v4
+      - name: Configura
+        run: cmake -S . -B build -A x64
+      - name: Compila
+        run: cmake --build build --config Release --target RikyPianoMan_VST3 RikyPianoMan_Standalone
+      - name: Controllo con pluginval
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri https://github.com/Tracktion/pluginval/releases/download/v1.0.4/pluginval_Windows.zip -OutFile pv.zip
+          Expand-Archive pv.zip -DestinationPath pv
+          $pv = (Get-ChildItem -Recurse pv -Filter pluginval.exe | Select-Object -First 1).FullName
+          & $pv --strictness-level 10 --validate-in-process --skip-gui-tests "build/RikyPianoMan_artefacts/Release/VST3/Riky Piano Man.vst3"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Comprimi
+        shell: pwsh
+        run: |
+          $r = "build/RikyPianoMan_artefacts/Release"
+          Compress-Archive -Path "$r/VST3/Riky Piano Man.vst3" -DestinationPath "RikyPianoMan-VST3-win.zip"
+          Compress-Archive -Path "$r/Standalone/Riky Piano Man.exe" -DestinationPath "RikyPianoMan-App-win.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: "*.zip"
+
+  release:
+    name: Pubblica in Releases
+    if: github.ref == 'refs/heads/main'
+    needs: [prova, mac, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: mac
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows
+          path: dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          name: Riky Piano Man 1.0.${{ github.run_number }}
+          body: |
+            Compilato automaticamente da GitHub dal commit ${{ github.sha }}.
+
+            **Mac** (Intel e Apple Silicon, macOS 11 o successivo)
+            - RikyPianoMan-VST3-mac.zip: estrai e copia in ~/Library/Audio/Plug-Ins/VST3/
+            - RikyPianoMan-AU-mac.zip: estrai e copia in ~/Library/Audio/Plug-Ins/Components/
+            - RikyPianoMan-App-mac.zip: versione autonoma, va in Applicazioni
+            Il plugin non è firmato da Apple: dopo averlo copiato, nel Terminale
+            `xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/"Riky Piano Man.vst3" ~/Library/Audio/Plug-Ins/Components/"Riky Piano Man.component" /Applications/"Riky Piano Man.app"`
+
+            **Windows** (64 bit)
+            - RikyPianoMan-VST3-win.zip: estrai e copia la cartella "Riky Piano Man.vst3" in C:\Program Files\Common Files\VST3\
+            - RikyPianoMan-App-win.zip: versione autonoma (Riky Piano Man.exe)
+
+            **Il suono** (una volta sola): al primo avvio premi INSTALL. Il plugin scarica circa 256 MB di campioni dal repository ufficiale
+            https://github.com/sfzinstruments/MatsHelgesson.MaestroConcertGrandPiano e li mette in Musica/Riky Piano Man.
+            Campioni © Mats Helgesson 2003, conversione SFZ di kinwie: set gratuito, non si può vendere.
+          files: dist/*.zip

@@ -1,0 +1,76 @@
+#pragma once
+#include "MBStudioMidi.h"
+#include "Params.h"
+#include "PianoEngine.h"
+#include "SampleLibrary.h"
+#include <juce_audio_utils/juce_audio_utils.h>
+#include <juce_dsp/juce_dsp.h>
+
+class RikyProcessor : public juce::AudioProcessor
+{
+public:
+    RikyProcessor();
+    ~RikyProcessor() override;
+
+    void prepareToPlay (double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override {}
+    bool isBusesLayoutSupported (const BusesLayout&) const override;
+    void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+    using AudioProcessor::processBlock;
+
+    juce::AudioProcessorEditor* createEditor() override;
+    bool hasEditor() const override { return true; }
+
+    const juce::String getName() const override { return JucePlugin_Name; }
+    bool acceptsMidi() const override { return true; }
+    bool producesMidi() const override { return false; }
+    bool isMidiEffect() const override { return false; }
+    double getTailLengthSeconds() const override { return 8.0; }
+
+    int getNumPrograms() override { return 1; }
+    int getCurrentProgram() override { return 0; }
+    void setCurrentProgram (int) override {}
+    const juce::String getProgramName (int) override { return {}; }
+    void changeProgramName (int, const juce::String&) override {}
+
+    void getStateInformation (juce::MemoryBlock&) override;
+    void setStateInformation (const void*, int) override;
+
+    // ---- thread dei messaggi
+    void loadPiano (const juce::File& sfz);          // un file .sfz del Maestro (o un altro SFZ)
+    void installPiano() { library.startInstall(); }
+
+    float outputLevel() const noexcept { return level.load(); }
+    void requestPanic() noexcept { engine.requestPanic(); }
+
+    juce::AudioProcessorValueTreeState state;
+    juce::MidiKeyboardState keyboardState;
+    mbstudio::midi::MidiMapper midiMap;
+    riky::PianoEngine engine;
+    riky::SampleLibrary library;
+    std::function<void()> onStatusChanged;           // per il pannello (thread dei messaggi)
+
+    // guadagno fisso: il file SFZ suona basso (CC 7 a 100, picchi di circa -11 dBFS a velocity 127)
+    static constexpr float makeupDb = 6.f;
+
+private:
+    std::atomic<float>* tone = nullptr, *tune = nullptr, *transpose = nullptr, *a4ref = nullptr, *velCurve = nullptr,
+                       *dynamics = nullptr, *release = nullptr, *keyNoise = nullptr, *pedNoise = nullptr,
+                       *pedal = nullptr, *soft = nullptr, *softAmt = nullptr,
+                       *roomOn = nullptr, *roomSize = nullptr, *roomDamp = nullptr, *roomMix = nullptr, *width = nullptr, *volume = nullptr;
+
+    using Filter = juce::dsp::IIR::Filter<float>;
+    Filter lowShelf[2], highShelf[2];
+    float appliedTone = 1.0e9f;
+    double sr = 44100.0;
+    juce::Reverb reverb;
+    bool reverbCleared = false;
+    juce::SmoothedValue<float> gain, wet, widthSm;
+    juce::AudioBuffer<float> dry;
+    std::atomic<float> level { 0.f };
+
+    void updateTone (float t);
+    void notify();
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RikyProcessor)
+};
