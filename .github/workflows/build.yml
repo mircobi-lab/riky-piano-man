@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Librerie di sistema per JUCE
-        run: sudo apt-get update -q && sudo apt-get install -y -q libfreetype-dev libfontconfig1-dev libasound2-dev libcurl4-openssl-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxext-dev libxi-dev libxcomposite-dev libxrender-dev
+        run: sudo apt-get update -q && sudo apt-get install -y -q libfreetype-dev libfontconfig1-dev libasound2-dev libcurl4-openssl-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxext-dev libxi-dev libxcomposite-dev libxrender-dev ffmpeg
       - name: Configura
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DRIKY_BUILD_TOOLS=ON
       - name: Compila lo strumento di prova
