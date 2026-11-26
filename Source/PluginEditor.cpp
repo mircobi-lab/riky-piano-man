@@ -221,10 +221,24 @@ RikyPanel::RikyPanel (RikyProcessor& p)
     gSeq.addAndMakeVisible (songView);
     gSeq.addAndMakeVisible (exportBtn);
     gSeq.addAndMakeVisible (helpBtn);
+    commandBox.setTitle ("Comando");
+    commandBox.setHelpText (juce::CharPointer_UTF8 ("Scrivi una parola e premi Invio: suona, ferma, registra, demo, esporta, stato, tempo 90. Scrivi aiuto per l'elenco."));
+    commandBox.setTooltip (commandBox.getHelpText());
+    commandBox.setTextToShowWhenEmpty ("COMANDO: SCRIVI AIUTO", C::printDim);
+    commandBox.setSelectAllWhenFocused (true);
+    commandBox.setFont (ui::Fonts::label (14.f));
+    commandBox.setColour (juce::TextEditor::backgroundColourId, juce::Colour (0xff07090c));
+    commandBox.setColour (juce::TextEditor::textColourId, C::print);
+    commandBox.setColour (juce::TextEditor::outlineColourId, juce::Colour (0xff3a3c40));
+    commandBox.setColour (juce::TextEditor::focusedOutlineColourId, C::ledBlue);
+    commandBox.setColour (juce::CaretComponent::caretColourId, C::ledBlue);
+    commandBox.onReturnKey = [this] { const auto t = commandBox.getText(); commandBox.clear(); runCommand (t); };
+    commandBox.onEscapeKey = [this] { commandBox.clear(); };
+    gSeq.addAndMakeVisible (commandBox);
     // ordine di Tab dentro i gruppi: come si leggono i pulsanti, da sinistra a destra
     {
         int o = 1;
-        for (juce::Component* c : { (juce::Component*) &demoBtn, (juce::Component*) &loadBtn, (juce::Component*) &saveBtn, (juce::Component*) &recBtn,
+        for (juce::Component* c : { (juce::Component*) &commandBox, (juce::Component*) &demoBtn, (juce::Component*) &loadBtn, (juce::Component*) &saveBtn, (juce::Component*) &recBtn,
                                     (juce::Component*) &playBtn, (juce::Component*) &stopBtn, (juce::Component*) &songView, (juce::Component*) &exportBtn,
                                     &find (id::metro)->comp(), &find (id::countIn)->comp(), &find (id::tempo)->comp(), &find (id::cues)->comp(),
                                     (juce::Component*) &helpBtn })
@@ -268,14 +282,13 @@ RikyPanel::RikyPanel (RikyProcessor& p)
             {
                 safeThis->lastExport = r.file;
                 safeThis->seqMessage = {};
-                safeThis->say ("Esportazione finita: " + r.file.getFileName() + " nella cartella " + r.file.getParentDirectory().getFileName()
-                               + ". Picco " + juce::String (r.peakDb, 1).replaceCharacter ('.', ',') + " decibel"
-                               + (r.peakDb > -.1f ? ". Attenzione: c'è distorsione, abbassa il volume." : "."));
+                safeThis->say ("Esportato: " + r.file.getFileName() + ". Picco " + juce::String (r.peakDb, 1).replaceCharacter ('.', ',') + " dB"
+                               + (r.peakDb > -.1f ? ". Distorce: abbassa il volume" : ""));
             }
             else
             {
                 safeThis->seqMessage = "EXPORT: " + r.text;
-                safeThis->say ("Esportazione non riuscita: " + r.text.toLowerCase());
+                safeThis->say ("Errore export: " + r.text.toLowerCase());
             }
         }
         safeThis->instrumentChanged();
@@ -472,15 +485,11 @@ void RikyPanel::mouseDown (const juce::MouseEvent& e)
 // ------------------------------------------------------------------------------------------------ accessibilità
 namespace
 {
-    juce::String duration (double t)
+    // tempo breve per la barra braille: 1:34
+    juce::String mmss (double t)
     {
         const int sec = juce::roundToInt (juce::jmax (0.0, t));
-        const int m = sec / 60, s = sec % 60;
-        juce::String out;
-        if (m > 0) out << m << (m == 1 ? " minuto" : " minuti");
-        if (m > 0 && s > 0) out << " e ";
-        if (s > 0 || m == 0) out << s << (s == 1 ? " secondo" : " secondi");
-        return out;
+        return juce::String (sec / 60) + ":" + juce::String (sec % 60).paddedLeft ('0', 2);
     }
     juce::String songName (const juce::String& n) { return n.replace ("(DEMO)", "(demo)").replace ("TAKE", "Ripresa").toLowerCase().replace ("riky's theme", "Riky's Theme"); }
 }
@@ -541,26 +550,28 @@ void RikyPanel::say (const juce::String& text, bool important)
         juce::File (log).appendText (text + "\n");
 }
 
+// Testi pensati per la barra braille di 40 celle: prima l'informazione, poi i dettagli
 juce::String RikyPanel::statusText (bool full) const
 {
     juce::String t;
     const auto st = proc.engine.status();
     const auto ls = proc.library.state();
-    if (ls == LibState::downloading) t << "Download del pianoforte: " << juce::roundToInt (proc.library.progress() * 100.f) << " per cento. ";
-    else if (ls == LibState::extracting) t << "Installazione dei file del pianoforte. ";
-    if (st == Status::ready && info != nullptr) t << "Pianoforte pronto: " << info->name << ". ";
-    else if (st == Status::loading) t << "Caricamento del pianoforte. ";
-    else if (st == Status::error) t << "Pianoforte non caricato: " << proc.engine.errorText().toLowerCase() << ". ";
-    else if (ls != LibState::downloading && ls != LibState::extracting) t << "Pianoforte non installato: premi Invio per scaricarlo. ";
-    if (ls == LibState::failed && st != Status::ready) t << "Download non riuscito: " << proc.library.errorText().toLowerCase() << ". ";
+    if (ls == LibState::downloading) t << "Download " << juce::roundToInt (proc.library.progress() * 100.f) << "%. ";
+    else if (ls == LibState::extracting) t << "Installazione file. ";
+    if (st == Status::ready && info != nullptr) t << "Pronto: " << info->name << ". ";
+    else if (st == Status::loading) t << "Caricamento. ";
+    else if (st == Status::error) t << "Errore: " << proc.engine.errorText().toLowerCase() << ". ";
+    else if (ls != LibState::downloading && ls != LibState::extracting) t << "Non installato, Invio per scaricare. ";
+    if (ls == LibState::failed && st != Status::ready) t << "Download fallito: " << proc.library.errorText().toLowerCase() << ". ";
     if (full && st == Status::ready && info != nullptr)
     {
-        t << "Voci attive " << proc.engine.activeVoices() << " su " << polyphony ((int) proc.state.getRawParameterValue (id::poly)->load()) << ". ";
-        if (proc.engine.pedalDown()) t << "Pedale di risonanza giù. ";
-        if (proc.engine.softDown()) t << "Pedale una corda giù. ";
+        t << "Voci " << proc.engine.activeVoices() << " su " << polyphony ((int) proc.state.getRawParameterValue (id::poly)->load()) << ". ";
+        if (proc.engine.pedalDown()) t << "Pedale giù. ";
+        if (proc.engine.softDown()) t << "Una corda giù. ";
         if (const int sw = proc.engine.currentSwitch(); sw >= 0)
             if (auto k = info->switchLabels.find (sw); k != info->switchLabels.end()) t << "Articolazione " << k->second << ". ";
         if (const int last = proc.engine.lastNote(); last >= 0) t << "Ultima nota " << italianNote (last) << ". ";
+        t << "Tempo " << juce::roundToInt (proc.state.getRawParameterValue (id::tempo)->load()) << ". ";
         const int temper = (int) proc.state.getRawParameterValue (id::temper)->load();
         if (temper > 0) t << "Temperamento " << italianChoices (id::temper)[temper] << ". ";
     }
@@ -570,15 +581,16 @@ juce::String RikyPanel::statusText (bool full) const
 juce::String RikyPanel::songText() const
 {
     using S = Sequencer::State;
+    if (commandReply.isNotEmpty() && juce::Time::getMillisecondCounter() - commandReplyMs < 15000) return commandReply;
     const auto st = proc.sequencer.state();
-    if (proc.exporter.busy()) return "Esportazione in corso: " + juce::String (juce::roundToInt (proc.exporter.progress() * 100.f)) + " per cento.";
-    if (st == S::countIn) return "Conteggio prima della registrazione.";
-    if (st == S::recording) return "Registrazione in corso: " + duration (proc.sequencer.position()) + ".";
-    if (proc.sequencer.isEmpty()) return "Nessun brano. D suona la demo, R registra, Comando O apre un file MIDI.";
-    juce::String t = "Brano " + songName (proc.sequencer.name()) + ", " + juce::String (proc.sequencer.numNotes()) + " note, durata " + duration (proc.sequencer.length()) + ". ";
-    if (st == S::playing) t << "In riproduzione: " << duration (proc.sequencer.position()) << ".";
-    else t << "Fermo.";
-    if (lastExport.existsAsFile()) t << " Ultima esportazione: " << lastExport.getFileName() << ".";
+    if (proc.exporter.busy()) return "Esporta " + juce::String (juce::roundToInt (proc.exporter.progress() * 100.f)) + "%";
+    if (st == S::countIn) return "Conteggio";
+    if (st == S::recording) return "Registra " + mmss (proc.sequencer.position());
+    if (proc.sequencer.isEmpty()) return "Nessun brano. D demo, R registra";
+    const auto name = songName (proc.sequencer.name());
+    if (st == S::playing) return "Suona " + mmss (proc.sequencer.position()) + " di " + mmss (proc.sequencer.length()) + ", " + name;
+    juce::String t = "Fermo, " + name + ", " + mmss (proc.sequencer.length()) + ", " + juce::String (proc.sequencer.numNotes()) + " note";
+    if (lastExport.existsAsFile()) t << ". Esportato: " << lastExport.getFileName();
     return t;
 }
 
@@ -590,23 +602,23 @@ void RikyPanel::announceChanges()
     {
         saidEngine = st;
         if ((Status) st == Status::ready && proc.engine.info() != nullptr)
-            say ("Pianoforte pronto: " + proc.engine.info()->name + ".");
+            say ("Pronto: " + proc.engine.info()->name);
         else if ((Status) st == Status::error)
-            say ("Pianoforte non caricato: " + proc.engine.errorText().toLowerCase() + ".");
+            say ("Errore pianoforte: " + proc.engine.errorText().toLowerCase());
     }
     // download
     if (const int ls = (int) proc.library.state(); ls != saidLib)
     {
         saidLib = ls;
-        if ((LibState) ls == LibState::extracting) say ("Download finito. Installazione dei file.");
-        else if ((LibState) ls == LibState::failed) say ("Download non riuscito: " + proc.library.errorText().toLowerCase() + ".");
+        if ((LibState) ls == LibState::extracting) say ("Download finito, installazione");
+        else if ((LibState) ls == LibState::failed) say ("Download fallito: " + proc.library.errorText().toLowerCase());
         saidProgress = -1;
     }
     if (proc.library.state() == LibState::downloading)
         if (const int step10 = juce::roundToInt (proc.library.progress() * 100.f) / 10; step10 != saidProgress && step10 > 0)
         {
             saidProgress = step10;
-            say ("Download " + juce::String (step10 * 10) + " per cento", false);
+            say ("Download " + juce::String (step10 * 10) + "%", false);
         }
     // sequencer
     const auto seq = proc.sequencer.state();
@@ -614,25 +626,25 @@ void RikyPanel::announceChanges()
     {
         const auto before = (S) saidSeq;
         saidSeq = (int) seq;
-        if (seq == S::playing) say ("Riproduzione: " + songName (proc.sequencer.name()) + ".");
+        if (seq == S::playing) say ("Suona: " + songName (proc.sequencer.name()));
         else if (seq == S::countIn)
         {
             const int bars = (int) proc.state.getRawParameterValue (id::countIn)->load();
-            say ("Conteggio di " + juce::String (bars) + (bars == 1 ? " battuta" : " battute") + " a " + juce::String (juce::roundToInt (proc.state.getRawParameterValue (id::tempo)->load())) + " battiti.");
+            say ("Conteggio " + juce::String (bars) + (bars == 1 ? " battuta, " : " battute, ") + juce::String (juce::roundToInt (proc.state.getRawParameterValue (id::tempo)->load())) + " BPM");
         }
-        else if (seq == S::recording && before != S::countIn) say ("Registrazione.");
+        else if (seq == S::recording && before != S::countIn) say ("Registra");
         else if (seq == S::stopped && before == S::playing)
-            say (proc.sequencer.position() >= proc.sequencer.length() - .05 ? juce::String ("Fine del brano.") : juce::String ("Fermo."));
+            say (proc.sequencer.position() >= proc.sequencer.length() - .05 ? juce::String ("Fine del brano") : juce::String ("Fermo"));
         else if (seq == S::stopped && (before == S::recording || before == S::countIn) && proc.sequencer.name() == lastSongName)
-            say ("Registrazione fermata: nessuna nota registrata.");
+            say ("Registrazione vuota: nessuna nota");
     }
     if (proc.sequencer.name() != lastSongName)
     {
         lastSongName = proc.sequencer.name();
         if (lastSongName.startsWith ("TAKE"))
-            say ("Registrazione finita: " + juce::String (proc.sequencer.numNotes()) + " note, " + duration (proc.sequencer.length()) + ". Spazio per riascoltare, Comando E per esportare.");
+            say ("Registrato: " + juce::String (proc.sequencer.numNotes()) + " note, " + mmss (proc.sequencer.length()));
         else if (lastSongName.isNotEmpty())
-            say ("Brano caricato: " + songName (lastSongName) + ", " + juce::String (proc.sequencer.numNotes()) + " note, " + duration (proc.sequencer.length()) + ".", false);
+            say ("Brano: " + songName (lastSongName) + ", " + mmss (proc.sequencer.length()), false);
     }
     // articolazione
     if (const int sw = proc.engine.currentSwitch(); sw != saidSwitch)
@@ -650,19 +662,106 @@ void RikyPanel::announceChanges()
         if (const int q = juce::roundToInt (proc.exporter.progress() * 100.f) / 25; q != saidProgress && q > 0 && q < 4)
         {
             saidProgress = q;
-            say ("Esportazione " + juce::String (q * 25) + " per cento", false);
+            say ("Esporta " + juce::String (q * 25) + "%", false);
         }
     }
 }
 
 void RikyPanel::announceHelp()
 {
-    say (juce::CharPointer_UTF8 ("Comandi da tastiera. "
-         "Barra spaziatrice o F5: suona e ferma. R o F6: registra, di nuovo per fermare. S: ferma. D: demo. Esc: panic. "
-         "I o F2: stato del pianoforte e del brano. M: metronomo. C: conteggio. Più e meno: tempo di un battito, Pagina su e Pagina giù di dieci. "
-         "Comando O: apri file MIDI. Comando S: salva. Comando E: esporta in MP3. Comando Maiuscole E: esporta in WAV. "
-         "Comando L: libreria. Comando M: assegna al controller MIDI il controllo selezionato. Comando Maiuscole M: togli l'assegnazione. "
-         "Tab passa al gruppo successivo. F1 ripete questo elenco."));
+    // in breve: l'elenco completo è nella guida, che si legge meglio in braille
+    say (juce::CharPointer_UTF8 ("Spazio suona, R registra, S ferma, D demo, Esc panic, I stato, M metronomo, C conteggio, "
+         "più e meno tempo, Comando E esporta MP3. Nel campo Comando scrivi aiuto, oppure guida per la guida completa."));
+}
+
+// Campo Comando: si scrive una parola con la tastiera (anche braille) e si preme Invio
+void RikyPanel::runCommand (const juce::String& typed)
+{
+    auto words = juce::StringArray::fromTokens (typed.toLowerCase().trim(), " ", "");
+    words.removeEmptyStrings();
+    if (words.isEmpty()) return;
+    commandReply = {};   // "stato" deve leggere lo stato vero, non la risposta precedente
+    const auto w = words[0];
+    const auto arg = words[1];
+    auto setParam = [this] (const char* pid, float realValue)
+    {
+        if (auto* p = dynamic_cast<juce::RangedAudioParameter*> (proc.state.getParameter (pid))) p->setValueNotifyingHost (p->convertTo0to1 (realValue));
+    };
+    auto is = [&] (std::initializer_list<const char*> names) { for (auto* n : names) if (w == n) return true; return false; };
+    juce::String reply;
+    using S = Sequencer::State;
+    if (is ({ "suona", "play", "p", "via" }))
+    {
+        if (proc.sequencer.isEmpty()) reply = "Nessun brano: scrivi demo";
+        else { if (proc.sequencer.state() != S::stopped) proc.stopSong(); proc.sequencer.play(); reply = "Suona: " + songName (proc.sequencer.name()); }
+    }
+    else if (is ({ "ferma", "stop", "s", "basta" })) { proc.stopSong(); reply = "Fermo"; }
+    else if (is ({ "registra", "rec", "r" }))
+    {
+        if (proc.sequencer.state() == S::recording || proc.sequencer.state() == S::countIn) { proc.stopSong(); reply = "Fine registrazione"; }
+        else { proc.toggleRecord(); reply = "Registra"; }
+    }
+    else if (is ({ "demo", "d" })) { proc.loadDemo(); proc.sequencer.play(); reply = "Suona: Riky's Theme (demo)"; }
+    else if (is ({ "esporta", "export", "e" }))
+    {
+        quickExport (arg == "wav" ? Exporter::Format::wav24 : arg == "v0" ? Exporter::Format::mp3_v0 : Exporter::Format::mp3_320);
+        reply = exportPending ? juce::String ("Esporta ") + (arg == "wav" ? "WAV" : "MP3") : juce::String ("Export non partito");
+    }
+    else if (is ({ "salva", "save" })) { saveMidi(); reply = "Salva: finestra del sistema"; }
+    else if (is ({ "apri", "open", "carica" })) { loadMidi(); reply = "Apri: finestra del sistema"; }
+    else if (is ({ "stato", "info", "i" })) reply = statusText (true) + " " + songText();
+    else if (is ({ "aiuto", "help", "?", "h" }))
+        reply = juce::CharPointer_UTF8 ("Comandi: suona, ferma, registra, demo, esporta, esporta wav, salva, apri, stato, tempo 90, metronomo, "
+                                        "conteggio 0 1 2, volume -6, trasponi 2, accorda 10, diapason 432, panic, installa, guida");
+    else if (is ({ "guida" })) { openGuide(); reply = "Guida aperta nell'editor di testo"; }
+    else if (is ({ "tempo", "bpm", "t" }))
+    {
+        if (arg.containsOnly ("0123456789")) { setParam (id::tempo, juce::jlimit (40.f, 240.f, (float) arg.getIntValue())); }
+        reply = "Tempo " + juce::String (juce::roundToInt (proc.state.getRawParameterValue (id::tempo)->load()));
+    }
+    else if (is ({ "metronomo", "metro", "m" }))
+    {
+        const bool on = arg == "si" || arg == "sì" || arg == "on" ? true : arg == "no" || arg == "off" ? false
+                        : proc.state.getRawParameterValue (id::metro)->load() < .5f;
+        setParam (id::metro, on ? 1.f : 0.f);
+        reply = on ? "Metronomo acceso" : "Metronomo spento";
+    }
+    else if (is ({ "conteggio", "count", "c" }))
+    {
+        const int n = arg.isNotEmpty() ? juce::jlimit (0, 2, arg.getIntValue()) : ((int) proc.state.getRawParameterValue (id::countIn)->load() + 1) % 3;
+        setParam (id::countIn, (float) n);
+        reply = "Conteggio: " + italianChoices (id::countIn)[n];
+    }
+    else if (is ({ "volume", "vol" }))
+    {
+        if (arg.isNotEmpty()) setParam (id::volume, juce::jlimit (-60.f, 12.f, arg.replaceCharacter (',', '.').getFloatValue()));
+        reply = "Volume " + accessibleValue (id::volume, proc.state.getRawParameterValue (id::volume)->load());
+    }
+    else if (is ({ "trasponi", "trasposizione" }))
+    {
+        if (arg.isNotEmpty()) setParam (id::transpose, juce::jlimit (-12.f, 12.f, (float) arg.getIntValue()));
+        reply = "Trasposizione " + accessibleValue (id::transpose, proc.state.getRawParameterValue (id::transpose)->load());
+    }
+    else if (is ({ "accorda", "intonazione" }))
+    {
+        if (arg.isNotEmpty()) setParam (id::tune, juce::jlimit (-50.f, 50.f, arg.replaceCharacter (',', '.').getFloatValue()));
+        reply = "Accordatura " + accessibleValue (id::tune, proc.state.getRawParameterValue (id::tune)->load());
+    }
+    else if (is ({ "diapason", "la" }))
+    {
+        if (arg == "432" || arg == "440") setParam (id::a4ref, arg == "432" ? 1.f : 0.f);
+        reply = "Diapason " + italianChoices (id::a4ref)[(int) proc.state.getRawParameterValue (id::a4ref)->load()];
+    }
+    else if (is ({ "panic", "panico" })) { panicBtn.triggerClick(); reply = "Panic: note spente"; }
+    else if (is ({ "installa", "install" })) { askInstall(); reply = "Installa: finestra di conferma"; }
+    else if (is ({ "libreria" })) { showLibraryMenu(); reply = "Libreria: menu aperto"; }
+    else reply = "Sconosciuto: " + w + ". Scrivi aiuto";
+
+    commandReply = reply;
+    commandReplyMs = juce::Time::getMillisecondCounter();
+    seqMessage = reply.toUpperCase();
+    songView.setText (songText());
+    say (reply);
 }
 
 void RikyPanel::openGuide()
@@ -685,8 +784,7 @@ void RikyPanel::quickExport (Exporter::Format fmt)
     lastExport = juce::File();
     exportPending = proc.exportSong (f, fmt);
     saidProgress = 0;
-    say (exportPending ? juce::String (fmt == Exporter::Format::wav24 ? "Esportazione in WAV iniziata." : "Esportazione in MP3 iniziata.")
-                       : juce::String ("Esportazione non partita."));
+    say (exportPending ? juce::String (fmt == Exporter::Format::wav24 ? "Esporta WAV" : "Esporta MP3") : juce::String ("Export non partito"));
 }
 
 void RikyPanel::learnFocused (bool forget)
@@ -771,12 +869,14 @@ void RikyPanel::loadMidi()
     {
         if (safeThis == nullptr) return;
         if (const auto f = fc.getResult(); f.existsAsFile())
+        {
             if (! safeThis->proc.sequencer.loadMidiFile (f))
             {
                 safeThis->seqMessage = "NOT A READABLE MIDI FILE: " + f.getFileName().toUpperCase();
-                safeThis->say ("Il file " + f.getFileName() + " non è un file MIDI leggibile.");
+                safeThis->say ("File MIDI non leggibile: " + f.getFileName());
             }
             else safeThis->seqMessage = {};
+        }
         safeThis->repaint();
     });
 }
@@ -1090,6 +1190,7 @@ void RikyPanel::resized()
     place (stopBtn, { 462, seqY, 76, 28 });
     place (songView, seqArea);
     place (exportBtn, { 1040, seqY, 186, 28 });
+    place (commandBox, { 892, seqY2, 206, 26 });
     place (helpBtn, { 1106, seqY2, 120, 26 });
     layoutSwitches();
     keyboard.setBounds (margin, keyboardY, baseW - 2 * margin, baseH - keyboardY - 12);

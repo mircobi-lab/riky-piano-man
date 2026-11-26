@@ -115,6 +115,9 @@ private:
               gEngine { "Motore" }, gTuning { "Accordatura" }, gMidi { "Controller MIDI" };
     A11yText statusView, songView;
     juce::TextButton helpBtn { "HELP" };
+    juce::TextEditor commandBox;          // per la tastiera braille: si scrive "suona", "registra", "tempo 90"...
+    juce::String commandReply;
+    juce::uint32 commandReplyMs = 0;
     juce::TextButton demoBtn { "DEMO" }, loadBtn { "LOAD" }, saveBtn { "SAVE" }, recBtn { "REC" }, playBtn { "PLAY" }, stopBtn { "STOP" }, exportBtn { "EXPORT MP3 / WAV" };
     juce::Rectangle<int> seqArea;
     juce::String seqMessage;
@@ -142,6 +145,7 @@ private:
     juce::String statusText (bool full) const;
     juce::String songText() const;
     void announceHelp();
+    void runCommand (const juce::String&);
     void quickExport (riky::Exporter::Format);
     void openGuide();
     void learnFocused (bool forget);
