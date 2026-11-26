@@ -10,7 +10,9 @@ using LibState = SampleLibrary::State;
 namespace
 {
 constexpr int margin = 14, lineY = 112, chipY = 124, cellY = 144, cellH = 88, knobW = 60, step = 64;
-constexpr int row2LabelY = 236, row2Y = 252, row2H = 28, footerY = 300, keyboardY = 322;
+constexpr int row2LabelY = 236, row2Y = 252, row2H = 28;
+// seconda fila: pedali, motore, accordatura, articolazioni
+constexpr int lineB = 292, chipB = 304, cellB = 324, comboB = 342, comboH = 26, footerY = 426, keyboardY = 448;
 constexpr int lcdY = chipY, lcdH = 16, lcdW = 136;
 constexpr float lcdPitch = 1.32f;
 const juce::Colour lcdGlass (0xff07142e), lcdDotOff (0xff10285a);
@@ -58,13 +60,15 @@ void RikyPanel::paintRikyLogo (juce::Graphics& g, juce::Rectangle<float> r)
 
 // ================================================================================================ pannello
 RikyPanel::RikyPanel (RikyProcessor& p)
-    : proc (p), keyboard (p.keyboardState, juce::MidiKeyboardComponent::horizontalKeyboard),
-      midiButtons (p.midiMap), midiOverlay (p.midiMap)
+    : proc (p), keyboard (p.keyboardState), midiButtons (p.midiMap), midiOverlay (p.midiMap)
 {
-    sections = { { "MAESTRO", "SFZ", { 246, chipY, 280, 160 } },
-                 { "PEDAL", {}, { 548, chipY, 190, 160 } },
-                 { "ROOM", {}, { 760, chipY, 210, 160 } },
-                 { "OUTPUT", {}, { 992, chipY, 234, 160 } } };
+    sections = { { "SFZ CONTROLS", "FROM THE SFZ FILE", { 246, chipY, 512, 160 } },
+                 { "ROOM", {}, { 778, chipY, 192, 160 } },
+                 { "OUTPUT", {}, { 992, chipY, 234, 160 } },
+                 { "PEDAL", {}, { margin, chipB, 212, 110 } },
+                 { "ENGINE", {}, { 246, chipB, 250, 110 } },
+                 { "TUNING", {}, { 516, chipB, 242, 110 } },
+                 { "ARTICULATION", "KEYSWITCHES", { 778, chipB, 448, 110 } } };
 
     // PIANO
     add (Kind::knob, id::tone, "TONE").cell = { margin, cellY, knobW, cellH };
@@ -72,30 +76,39 @@ RikyPanel::RikyPanel (RikyProcessor& p)
     add (Kind::knob, id::transpose, "TRANSP").cell = { margin + 2 * step, cellY, knobW, cellH };
     add (Kind::combo, id::a4ref, "A4 REF").cell = { margin, row2Y, 92, row2H };
     add (Kind::combo, id::velCurve, "VEL CURVE").cell = { margin + 100, row2Y, 104, row2H };
-    // MAESTRO: i quattro controlli del file SFZ
-    add (Kind::knob, id::dynamics, "DYNAMICS").cell = { 246, cellY, knobW, cellH };
-    add (Kind::knob, id::release, "RELEASE").cell = { 246 + step, cellY, knobW, cellH };
-    add (Kind::knob, id::keyNoise, "KEY NOISE").cell = { 246 + 2 * step, cellY, knobW, cellH };
-    add (Kind::knob, id::pedNoise, "PED NOISE").cell = { 246 + 3 * step, cellY, knobW, cellH };
-    // PEDAL
-    add (Kind::knob, id::softAmt, "SOFT AMT").cell = { 548, cellY, knobW, cellH };
-    add (Kind::toggle, id::pedal, "SUSTAIN").cell = { 548, row2Y, 96, row2H };
-    add (Kind::toggle, id::soft, "SOFT").cell = { 650, row2Y, 76, row2H };
+    // SFZ CONTROLS: i nomi arrivano dal file caricato
+    for (int i = 0; i < numSlots; ++i)
+    {
+        auto& c = add (Kind::knob, id::sfzSlot (i), "-");
+        c.slot = i;
+        c.cell = { 246 + i * step, cellY, knobW, cellH };
+    }
     // ROOM
-    add (Kind::knob, id::roomSize, "SIZE").cell = { 760, cellY, knobW, cellH };
-    add (Kind::knob, id::roomDamp, "DAMP").cell = { 760 + step, cellY, knobW, cellH };
-    add (Kind::knob, id::roomMix, "MIX").cell = { 760 + 2 * step, cellY, knobW, cellH };
-    add (Kind::toggle, id::roomOn, "ROOM").cell = { 760, row2Y, 84, row2H };
+    add (Kind::knob, id::roomSize, "SIZE").cell = { 778, cellY, knobW, cellH };
+    add (Kind::knob, id::roomDamp, "DAMP").cell = { 778 + step, cellY, knobW, cellH };
+    add (Kind::knob, id::roomMix, "MIX").cell = { 778 + 2 * step, cellY, knobW, cellH };
+    add (Kind::toggle, id::roomOn, "ROOM").cell = { 778, row2Y, 84, row2H };
     // OUTPUT
     add (Kind::fader, id::volume, "VOLUME").cell = { 998, cellY, 50, 136 };
     add (Kind::knob, id::width, "WIDTH").cell = { 1070, cellY, knobW, cellH };
+    // PEDAL
+    add (Kind::knob, id::softAmt, "SOFT AMT").cell = { margin, cellB, knobW, cellH };
+    add (Kind::toggle, id::pedal, "SUSTAIN").cell = { 94, cellB + 6, 132, 28 };
+    add (Kind::toggle, id::soft, "SOFT").cell = { 94, cellB + 46, 132, 28 };
+    // ENGINE
+    add (Kind::combo, id::quality, "QUALITY").cell = { 246, comboB, 118, comboH };
+    add (Kind::combo, id::poly, "POLYPHONY").cell = { 372, comboB, 124, comboH };
+    // TUNING
+    add (Kind::combo, id::temper, "TEMPERAMENT").cell = { 516, comboB, 166, comboH };
+    add (Kind::combo, id::temperKey, "KEY").cell = { 690, comboB, 68, comboH };
+    temperArea = { 516, comboB + 34, 242, 34 };
 
     find (id::roomOn)->button.getProperties().set ("ledColour", "ffffb020");
 
     installBtn.setTooltip ("Scarica il pianoforte Maestro Concert Grand (circa 256 MB) dal repository ufficiale sfzinstruments su GitHub");
     installBtn.onClick = [this] { askInstall(); };
-    folderBtn.setTooltip ("Scegli il file \"Maestro Concert Grand.sfz\" se i campioni sono in un'altra cartella");
-    folderBtn.onClick = [this] { chooseFile(); };
+    libraryBtn.setTooltip ("Strumenti SFZ: recenti, libreria nella cartella Musica/Riky Piano Man, altro file...");
+    libraryBtn.onClick = [this] { showLibraryMenu(); };
     panicBtn.setTooltip ("MIDI PANIC: spegne subito tutte le note e azzera i pedali");
     panicBtn.getProperties().set ("led", true);
     panicBtn.getProperties().set ("ledColour", "ffff3b30");
@@ -106,7 +119,7 @@ RikyPanel::RikyPanel (RikyProcessor& p)
         panicFlash = 15;
         touched = "PANIC"; touchedValue = "ALL NOTES OFF"; touchedMs = juce::Time::getMillisecondCounter();
     };
-    for (auto* b : { &installBtn, &folderBtn, &panicBtn }) addAndMakeVisible (*b);
+    for (auto* b : { &installBtn, &libraryBtn, &panicBtn }) addAndMakeVisible (*b);
     addAndMakeVisible (meter);
 
     keyboard.setColour (juce::MidiKeyboardComponent::whiteNoteColourId, juce::Colour (0xffdcdcd8));
@@ -117,8 +130,6 @@ RikyPanel::RikyPanel (RikyProcessor& p)
     keyboard.setColour (juce::MidiKeyboardComponent::shadowColourId, juce::Colours::black.withAlpha (.5f));
     keyboard.setColour (juce::MidiKeyboardComponent::upDownButtonBackgroundColourId, C::key);
     keyboard.setColour (juce::MidiKeyboardComponent::upDownButtonArrowColourId, C::print);
-    keyboard.setAvailableRange (21, 108);
-    keyboard.setLowestVisibleKey (21);
     keyboard.setScrollButtonsVisible (false);
     keyboard.setOctaveForMiddleC (4);
     keyboard.setWantsKeyboardFocus (false);
@@ -130,13 +141,15 @@ RikyPanel::RikyPanel (RikyProcessor& p)
     proc.onStatusChanged = [safeThis]
     {
         if (safeThis == nullptr) return;
+        safeThis->instrumentChanged();
         safeThis->updateButtons();
         safeThis->updateLcd();
         safeThis->repaint();
     };
+    setSize (baseW, baseH);
+    instrumentChanged();
     updateButtons();
     updateLcd();
-    setSize (baseW, baseH);
     startTimerHz (30);
 }
 
@@ -169,8 +182,7 @@ RikyPanel::Ctl& RikyPanel::add (Kind kind, const char* pid, const juce::String& 
             const juce::String p (pid);
             c->slider.setSliderStyle (kind == Kind::knob ? juce::Slider::RotaryHorizontalVerticalDrag : juce::Slider::LinearVertical);
             c->slider.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
-            const bool maestro = p == id::dynamics || p == id::release || p == id::keyNoise || p == id::pedNoise;
-            c->slider.setColour (juce::Slider::trackColourId, p.startsWith ("ROOM") ? C::ledAmber : maestro ? C::ledBlue : C::ledGreen);
+            c->slider.setColour (juce::Slider::trackColourId, p.startsWith ("ROOM") ? C::ledAmber : p.startsWith ("SFZ") ? C::ledBlue : C::ledGreen);
             c->slider.setColour (juce::Slider::thumbColourId, C::print);
             c->slider.setMouseDragSensitivity (200);
             if (param != nullptr) c->slider.setDoubleClickReturnValue (true, param->convertFrom0to1 (param->getDefaultValue()));
@@ -304,13 +316,173 @@ void RikyPanel::updateButtons()
     installBtn.repaint();
 }
 
+// ------------------------------------------------------------------------------------------------ strumento
+void RikyPanel::instrumentChanged()
+{
+    info = proc.engine.status() == Status::ready ? proc.engine.info() : nullptr;
+    // SFZ CONTROLS: nome dal file, posti vuoti spenti
+    for (auto& c : ctls)
+        if (c->slot >= 0)
+        {
+            const bool on = info != nullptr && c->slot < (int) info->controls.size();
+            c->label = on ? info->controls[(size_t) c->slot].label.toUpperCase() : juce::String ("-");
+            c->slider.setEnabled (on);
+            c->slider.setAlpha (on ? 1.f : .3f);
+            c->slider.setTooltip (on ? info->controls[(size_t) c->slot].label + " (CC " + juce::String (info->controls[(size_t) c->slot].cc) + ")" : juce::String());
+        }
+    // tastiera: tutta l'estensione dello strumento, keyswitch compresi, mai meno di 88 tasti
+    int lo = 21, hi = 108;
+    if (info != nullptr)
+        for (int k = 0; k < 128; ++k)
+            if (info->keys[(size_t) k] || info->switches[(size_t) k]) { lo = juce::jmin (lo, k); hi = juce::jmax (hi, k); }
+    // la tastiera parte e finisce su un tasto bianco
+    auto black = [] (int n) { const int m = n % 12; return m == 1 || m == 3 || m == 6 || m == 8 || m == 10; };
+    if (black (lo)) --lo;
+    if (black (hi)) ++hi;
+    keyboard.info = info;
+    keyboard.setAvailableRange (lo, hi);
+    keyboard.setLowestVisibleKey (lo);
+    int whites = 0;
+    for (int k = lo; k <= hi; ++k) if (! black (k)) ++whites;
+    keyboard.setKeyWidth ((float) (baseW - 2 * margin) / (float) juce::jmax (1, whites));
+    keyboard.repaint();
+    layoutSwitches();
+    repaint();
+}
+
+void RikyPanel::layoutSwitches()
+{
+    switchBtns.clear();
+    if (info == nullptr) return;
+    juce::Array<int> keys;
+    for (int k = 0; k < 128; ++k) if (info->switches[(size_t) k]) keys.add (k);
+    const int maxButtons = 6, cols = 3, bw = 144, bh = 26;
+    const bool more = keys.size() > maxButtons;
+    for (int i = 0; i < juce::jmin (keys.size(), maxButtons); ++i)
+    {
+        const bool isMore = more && i == maxButtons - 1;
+        const int key = keys[i];
+        auto it = info->switchLabels.find (key);
+        juce::String text = isMore ? "MORE (" + juce::String (keys.size() - (maxButtons - 1)) + ")"
+                                   : (it != info->switchLabels.end() ? it->second : juce::String (noteName (key)) + juce::String (key / 12 - 1)).toUpperCase();
+        auto* b = switchBtns.add (new juce::TextButton (text));
+        b->getProperties().set ("led", ! isMore);
+        b->getProperties().set ("ledColour", "ffffb020");
+        b->setTooltip (isMore ? juce::String ("Altre articolazioni") : "Keyswitch " + juce::String (noteName (key)) + juce::String (key / 12 - 1));
+        b->setBounds (778 + (i % cols) * (bw + 8), cellB + 8 + (i / cols) * (bh + 12), bw, bh);
+        b->getProperties().set ("switchKey", isMore ? -1 : key);
+        b->onClick = [this, key, isMore, keys]
+        {
+            if (! isMore) { pressSwitch (key); return; }
+            juce::PopupMenu m;
+            for (int k : keys)
+            {
+                auto f = info->switchLabels.find (k);
+                m.addItem (k + 1, (f != info->switchLabels.end() ? f->second : juce::String ("KEYSWITCH")) + "  (" + noteName (k) + juce::String (k / 12 - 1) + ")",
+                           true, k == proc.engine.currentSwitch());
+            }
+            juce::Component::SafePointer<RikyPanel> safeThis (this);
+            m.showMenuAsync (juce::PopupMenu::Options(), [safeThis] (int r) { if (safeThis != nullptr && r > 0) safeThis->pressSwitch (r - 1); });
+        };
+        addAndMakeVisible (b);
+    }
+    shownSwitch = -2;
+}
+
+void RikyPanel::pressSwitch (int key)
+{
+    // come premere il tasto sulla tastiera: il motore riconosce il keyswitch
+    proc.keyboardState.noteOn (1, key, .8f);
+    proc.keyboardState.noteOff (1, key, 0.f);
+}
+
+void RikyPanel::showLibraryMenu()
+{
+    juce::PopupMenu m;
+    const auto current = proc.engine.currentFile();
+    std::vector<juce::File> files;
+    auto addFile = [&] (juce::PopupMenu& menu, const juce::File& f, const juce::String& text)
+    {
+        files.push_back (f);
+        menu.addItem ((int) files.size(), text, true, f == current);
+    };
+    m.addSectionHeader ("RECENT");
+    const auto rec = SampleLibrary::recent();
+    if (rec.isEmpty()) m.addItem (-1, "(NONE)", false);
+    for (auto& f : rec) addFile (m, f, f.getFileNameWithoutExtension().toUpperCase() + "   -   " + f.getParentDirectory().getFileName());
+    m.addSectionHeader ("LIBRARY  (MUSIC / RIKY PIANO MAN)");
+    const auto lib = SampleLibrary::findAllSfz (SampleLibrary::baseFolder());
+    if (lib.isEmpty()) m.addItem (-1, "(EMPTY: PUT SFZ INSTRUMENTS IN THIS FOLDER)", false);
+    juce::String lastFolder;
+    juce::PopupMenu sub;
+    for (auto& f : lib)
+    {
+        const auto rel = f.getRelativePathFrom (SampleLibrary::baseFolder());
+        addFile (m, f, rel.replaceCharacter ('\\', '/').upToLastOccurrenceOf (".", false, false).toUpperCase());
+    }
+    m.addSeparator();
+    m.addItem (10001, "OPEN ANOTHER SFZ FILE...");
+    m.addItem (10002, "SHOW LIBRARY FOLDER");
+    m.addItem (10003, "MAESTRO CONCERT GRAND: DOWNLOAD...");
+    juce::Component::SafePointer<RikyPanel> safeThis (this);
+    m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&libraryBtn), [safeThis, files] (int r)
+    {
+        if (safeThis == nullptr || r == 0) return;
+        if (r == 10001) safeThis->chooseFile();
+        else if (r == 10002) { SampleLibrary::baseFolder().createDirectory(); SampleLibrary::baseFolder().startAsProcess(); }
+        else if (r == 10003) safeThis->askInstall();
+        else if (r > 0 && r <= (int) files.size()) safeThis->proc.loadPiano (files[(size_t) r - 1]);
+    });
+}
+
+// ------------------------------------------------------------------------------------------------ tastiera
+void RikyKeyboard::drawWhiteNote (int note, juce::Graphics& g, juce::Rectangle<float> area, bool isDown, bool isOver, juce::Colour line, juce::Colour text)
+{
+    juce::Colour c = findColour (whiteNoteColourId);
+    if (isSwitch (note)) c = note == currentSwitch ? juce::Colour (0xffffb020) : juce::Colour (0xffb98a3a);
+    else if (! used (note)) c = juce::Colour (0xff77787a);
+    if (isDown) c = c.overlaidWith (findColour (keyDownOverlayColourId));
+    if (isOver) c = c.overlaidWith (findColour (mouseOverKeyOverlayColourId));
+    g.setColour (c);
+    g.fillRect (area);
+    g.setColour (line);
+    g.fillRect (area.withWidth (1.f));
+    if (note == getRangeEnd()) g.fillRect (area.withLeft (area.getRight() - 1.f));
+    juce::ignoreUnused (text);
+    if (note % 12 == 0)
+    {
+        g.setColour (juce::Colour (0xff3a3c40));
+        g.setFont (mbstudio::ui::Fonts::label (10.f));
+        g.drawText ("C" + juce::String (note / 12 - 1), area.withTrimmedTop (area.getHeight() - 16.f), juce::Justification::centred, false);
+    }
+}
+
+void RikyKeyboard::drawBlackNote (int note, juce::Graphics& g, juce::Rectangle<float> area, bool isDown, bool isOver, juce::Colour fill)
+{
+    juce::Colour c = fill;
+    if (isSwitch (note)) c = note == currentSwitch ? juce::Colour (0xffffb020) : juce::Colour (0xff7a5a20);
+    else if (! used (note)) c = juce::Colour (0xff2a2b2e);
+    if (isDown) c = c.overlaidWith (findColour (keyDownOverlayColourId));
+    if (isOver) c = c.overlaidWith (findColour (mouseOverKeyOverlayColourId));
+    g.setColour (c);
+    g.fillRect (area);
+    if (! isDown)
+    {
+        g.setColour (c.brighter (.35f));
+        const auto sideIndent = area.getWidth() * .125f, topIndent = area.getHeight() * .875f;
+        g.fillRect (area.reduced (sideIndent, 0).removeFromTop (topIndent));
+        g.setColour (c);
+        g.fillRect (area.reduced (sideIndent * 1.4f, 0).removeFromTop (topIndent * .95f));
+    }
+}
+
 // ------------------------------------------------------------------------------------------------ layout
 void RikyPanel::resized()
 {
     displayArea = { 420, 14, 560, 90 };
     lcdArea = { margin, lcdY, lcdW, lcdH };
     installBtn.setBounds (994, 16, 112, 30);
-    folderBtn.setBounds (1112, 16, 114, 30);
+    libraryBtn.setBounds (1112, 16, 114, 30);
     midiButtons.setBounds (994, 58, 166, 30);
     panicBtn.setBounds (1166, 58, 60, 30);
 
@@ -326,7 +498,6 @@ void RikyPanel::resized()
     }
     meter.setBounds (1070, 266, 144, 8);
     keyboard.setBounds (margin, keyboardY, baseW - 2 * margin, baseH - keyboardY - 12);
-    keyboard.setKeyWidth ((float) (baseW - 2 * margin) / 52.f);
     midiOverlay.setBounds (getLocalBounds());
 }
 
@@ -342,7 +513,7 @@ void RikyPanel::paintDisplay (juce::Graphics& g)
 
     juce::String title;
     if (busy) title = ls == LibState::downloading ? "DOWNLOADING  " + juce::String (juce::roundToInt (proc.library.progress() * 100.f)) + "%" : "INSTALLING...";
-    else if (st == Status::ready) title = "MAESTRO CONCERT GRAND";
+    else if (st == Status::ready) title = info != nullptr ? info->name.toUpperCase() : juce::String ("READY");
     else if (st == Status::loading) title = "LOADING PIANO...";
     else if (st == Status::error) title = "PIANO NOT LOADED";
     else title = "PIANO NOT INSTALLED";
@@ -383,8 +554,10 @@ void RikyPanel::paintDisplay (juce::Graphics& g)
         line (row2, { { "ERROR", proc.engine.errorText() }, { "FILE", proc.engine.currentFile().getFileName().toUpperCase() } });
     else if (st == Status::empty)
         line (row2, { { "", "CLICK INSTALL  -  256 MB FROM GITHUB, ONE TIME ONLY" } });
-    else
+    else if (info != nullptr && info->name.containsIgnoreCase ("Maestro Concert Grand"))
         line (row2, { { "YAMAHA CF-3", "SAMPLED BY MATS HELGESSON 2003" }, { "SFZ", "KINWIE" } });
+    else if (info != nullptr)
+        line (row2, { { "SFZ", info->file.getFileName().toUpperCase() }, { "IN", info->file.getParentDirectory().getFileName().toUpperCase() } });
 
     if (! busy)
     {
@@ -394,9 +567,25 @@ void RikyPanel::paintDisplay (juce::Graphics& g)
         else if (st == Status::ready || st == Status::loading)
         {
             const int last = proc.engine.lastNote();
-            line (row3, { { "REGIONS", juce::String (proc.engine.numRegions()) },
-                          { "VOICES", juce::String (proc.engine.activeVoices()) },
-                          { "LAST", last >= 0 ? juce::String (noteName (last)) + juce::String (last / 12 - 1) : juce::String ("--") } });
+            juce::String lastText = last >= 0 ? juce::String (noteName (last)) + juce::String (last / 12 - 1) : juce::String ("--");
+            if (info != nullptr && last >= 0)
+                if (auto k = info->keyLabels.find (last); k != info->keyLabels.end()) lastText << " " << k->second.toUpperCase();
+            const int sw = proc.engine.currentSwitch();
+            juce::String swText;
+            if (info != nullptr && sw >= 0)
+            {
+                auto k = info->switchLabels.find (sw);
+                swText = k != info->switchLabels.end() ? k->second.toUpperCase() : juce::String (noteName (sw)) + juce::String (sw / 12 - 1);
+            }
+            if (swText.isNotEmpty())
+                line (row3, { { "REGIONS", juce::String (proc.engine.numRegions()) },
+                              { "VOICES", juce::String (proc.engine.activeVoices()) },
+                              { "ART", swText }, { "LAST", lastText } });
+            else
+                line (row3, { { "REGIONS", juce::String (proc.engine.numRegions()) },
+                              { "SAMPLES", juce::String (info != nullptr ? info->samples : 0) },
+                              { "VOICES", juce::String (proc.engine.activeVoices()) + " / " + juce::String (polyphony ((int) proc.state.getRawParameterValue (id::poly)->load())) },
+                              { "LAST", lastText } });
         }
         else
             line (row3, { { "FOR", "RIKY MERCENATI" } });
@@ -422,6 +611,30 @@ void RikyPanel::paintDisplay (juce::Graphics& g)
     }
 }
 
+void RikyPanel::paintTemperament (juce::Graphics& g)
+{
+    // scarto di ogni nota dal temperamento equabile, a partire dalla tonica scelta: barre a LED
+    const int t = (int) proc.state.getRawParameterValue (id::temper)->load();
+    const int key = (int) proc.state.getRawParameterValue (id::temperKey)->load();
+    const auto* c = temperamentCents (t);
+    const auto r = temperArea.toFloat();
+    const float w = r.getWidth() / 12.f, mid = r.getY() + 12.f;
+    g.setColour (C::printDim.withAlpha (.4f));
+    g.fillRect (r.getX(), mid, r.getWidth(), 1.f);
+    for (int n = 0; n < 12; ++n)
+    {
+        const int degree = (n - key + 12) % 12;
+        const float dev = (float) (c[degree] - degree * 100.0);          // centesimi rispetto all'equabile
+        const float h = juce::jlimit (-11.f, 11.f, dev * .9f);   // 1 pixel circa ogni centesimo
+        const juce::Rectangle<float> bar (r.getX() + n * w + 3.f, h < 0 ? mid + 1.f : mid - h, w - 6.f, std::abs (h));
+        g.setColour (t == 0 ? C::ledOff : (std::abs (dev) > 12.f ? C::ledAmber : C::ledGreen));
+        g.fillRect (bar);
+        g.setColour (n == key ? C::print : C::printDim);
+        g.setFont (ui::Fonts::label (9.5f));
+        g.drawText (noteName (n), juce::Rectangle<float> (r.getX() + n * w, r.getY() + 24.f, w, 10.f), juce::Justification::centred, false);
+    }
+}
+
 void RikyPanel::paint (juce::Graphics& g)
 {
     ui::paintChassis (g, getLocalBounds());
@@ -431,6 +644,7 @@ void RikyPanel::paint (juce::Graphics& g)
 
     paintDisplay (g);
     ui::paintEngravedLine (g, { (float) margin, (float) lineY }, { (float) baseW - margin, (float) lineY });
+    ui::paintEngravedLine (g, { (float) margin, (float) lineB }, { (float) baseW - margin, (float) lineB });
 
     for (auto& s : sections)
     {
@@ -444,7 +658,7 @@ void RikyPanel::paint (juce::Graphics& g)
             const float tw = juce::GlyphArrangement::getStringWidth (g.getCurrentFont(), s.scope) + 6.f;
             g.setColour (C::printDim);
             g.drawText (s.scope, juce::Rectangle<float> (a.getRight() - tw, a.getY() + 1.f, tw, 14.f), juce::Justification::centredRight, false);
-            ui::paintLed (g, { a.getRight() - tw - 6.f, a.getY() + 8.f }, 2.5f, C::ledBlue, 1.f);
+            ui::paintLed (g, { a.getRight() - tw - 6.f, a.getY() + 8.f }, 2.5f, s.title == "ARTICULATION" ? C::ledAmber : C::ledBlue, 1.f);
             lineEnd = a.getRight() - tw - 14.f;
         }
         ui::paintEngravedLine (g, { a.getX() + cw + 4.f, a.getY() + 8.f }, { lineEnd, a.getY() + 8.f });
@@ -457,13 +671,19 @@ void RikyPanel::paint (juce::Graphics& g)
         const auto cell = c->cell.toFloat();
         if (c->kind == Kind::knob)
         {
-            ui::paintPrinted (g, cell.withHeight (14.f).expanded (8.f, 0.f), c->label, 12.f, juce::Justification::centred);
-            ui::paintPrinted (g, { cell.getX() - 8.f, cell.getY() + 70.f, cell.getWidth() + 16.f, 14.f },
-                              formatValue (c->pid, (float) c->slider.getValue()), 11.f, juce::Justification::centred, C::printDim);
+            const bool off = c->slot >= 0 && ! c->slider.isEnabled();
+            ui::paintPrinted (g, cell.withHeight (14.f).expanded (2.f, 0.f), c->label, c->label.length() > 9 ? 10.f : 12.f, juce::Justification::centred,
+                              off ? C::printDim.withAlpha (.5f) : C::print);
+            if (! off)
+                ui::paintPrinted (g, { cell.getX() - 8.f, cell.getY() + 70.f, cell.getWidth() + 16.f, 14.f },
+                                  formatValue (c->pid, (float) c->slider.getValue()), 11.f, juce::Justification::centred, C::printDim);
+            if (c->slot >= 0 && ! off && info != nullptr)
+                ui::paintPrinted (g, { cell.getX(), (float) row2Y + 6.f, cell.getWidth(), 14.f },
+                                  "CC " + juce::String (info->controls[(size_t) c->slot].cc), 10.f, juce::Justification::centred, C::printDim.withAlpha (.7f));
         }
         else if (c->kind == Kind::combo)
         {
-            ui::paintPrinted (g, { cell.getX(), cell.getY() - (float) (row2Y - row2LabelY) - 2.f, cell.getWidth() + 20.f, 14.f }, c->label, 12.f);
+            ui::paintPrinted (g, { cell.getX(), cell.getY() - 18.f, cell.getWidth() + 20.f, 14.f }, c->label, 12.f);
         }
         else if (c->kind == Kind::fader)
         {
@@ -473,11 +693,32 @@ void RikyPanel::paint (juce::Graphics& g)
         }
     }
     ui::paintPrinted (g, { 1070.f, 248.f, 144.f, 14.f }, "OUT", 12.f);
-    ui::paintPrinted (g, { 246.f, (float) row2Y, 270.f, (float) row2H }, "CONTROLS OF THE SFZ  -  CC 99  72  80  81", 11.f,
-                      juce::Justification::centredLeft, C::printDim);
+    if (info == nullptr || info->controls.empty())
+        ui::paintPrinted (g, { 246.f, (float) row2Y + 6.f, 512.f, 14.f }, info == nullptr ? "LOAD AN SFZ INSTRUMENT" : "THIS SFZ DECLARES NO CONTROLS (LABEL_CC)", 11.f,
+                          juce::Justification::centredLeft, C::printDim);
 
-    ui::paintPrinted (g, { (float) margin, (float) footerY, 800.f, 16.f },
-                      "DOUBLE CLICK A KNOB TO RESET   -   CC64 SUSTAIN   -   CC66 SOSTENUTO   -   CC67 SOFT   -   CC120 PANIC", 11.f,
+    // ENGINE: stato del motore
+    {
+        const int poly = polyphony ((int) proc.state.getRawParameterValue (id::poly)->load());
+        const int voices = proc.engine.activeVoices();
+        ui::paintPrinted (g, { 246.f, (float) comboB + 36.f, 250.f, 14.f },
+                          "BOUNCE: MAX QUALITY  -  DISK STREAMING", 10.f, juce::Justification::centredLeft, C::printDim);
+        // LED di occupazione delle voci
+        const float x0 = 246.f, y0 = (float) comboB + 58.f, w = 250.f / 16.f;
+        for (int i = 0; i < 16; ++i)
+        {
+            const bool on = (float) voices / (float) poly > (float) i / 16.f && voices > 0;
+            g.setColour (on ? (i >= 13 ? C::ledRed : i >= 10 ? C::ledAmber : C::ledGreen) : C::ledOff);
+            g.fillRoundedRectangle (x0 + i * w + 1.f, y0, w - 3.f, 5.f, 1.f);
+        }
+    }
+    paintTemperament (g);
+    if (info == nullptr || info->switches.none())
+        ui::paintPrinted (g, { 778.f, (float) cellB + 30.f, 448.f, 16.f }, info == nullptr ? "NO INSTRUMENT LOADED" : "THIS SFZ HAS NO KEYSWITCHES",
+                          12.f, juce::Justification::centredLeft, C::printDim);
+
+    ui::paintPrinted (g, { (float) margin, (float) footerY, 900.f, 16.f },
+                      "DOUBLE CLICK A KNOB TO RESET   -   CC64 SUSTAIN   -   CC66 SOSTENUTO   -   CC67 SOFT   -   CC120 PANIC   -   DROP AN .SFZ ON THE PANEL", 11.f,
                       juce::Justification::centredLeft, C::printDim);
     ui::paintLogo (g, { (float) baseW - 260.f, (float) footerY, 246.f, 16.f }, false, ui::Imprint::debossed, juce::Justification::centredRight);
 }
@@ -550,6 +791,16 @@ void RikyPanel::timerCallback()
         }
     }
     meter.setLevel (std::pow (proc.outputLevel(), .5f));
+    if (const int sw = proc.engine.currentSwitch(); sw != shownSwitch)
+    {
+        shownSwitch = sw;
+        keyboard.currentSwitch = sw;
+        keyboard.repaint();
+        for (auto* b : switchBtns)
+            b->setToggleState ((int) b->getProperties()["switchKey"] == sw, juce::dontSendNotification);
+    }
+    repaint (246, comboB + 54, 252, 12);   // LED delle voci
+    repaint (temperArea);
     if (panicFlash > 0) --panicFlash;
     panicBtn.setToggleState (panicFlash > 0 && (panicFlash / 3) % 2 == 0, juce::dontSendNotification);
     repaint (displayArea);

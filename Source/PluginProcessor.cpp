@@ -10,26 +10,64 @@ RikyProcessor::RikyProcessor()
 {
     auto raw = [this] (const char* pid) { return state.getRawParameterValue (pid); };
     tone = raw (id::tone); tune = raw (id::tune); transpose = raw (id::transpose); a4ref = raw (id::a4ref); velCurve = raw (id::velCurve);
-    dynamics = raw (id::dynamics); release = raw (id::release); keyNoise = raw (id::keyNoise); pedNoise = raw (id::pedNoise);
+    quality = raw (id::quality); poly = raw (id::poly); temper = raw (id::temper); temperKey = raw (id::temperKey);
+    for (int i = 0; i < numSlots; ++i) slots[(size_t) i] = raw (id::sfzSlot (i));
     pedal = raw (id::pedal); soft = raw (id::soft); softAmt = raw (id::softAmt);
     roomOn = raw (id::roomOn); roomSize = raw (id::roomSize); roomDamp = raw (id::roomDamp); roomMix = raw (id::roomMix);
     width = raw (id::width); volume = raw (id::volume);
 
     // banchi per i profili dei controller: A suono, B strumento, C pedali e stanza, D uscita
-    midiMap.setBanks ({ juce::StringArray { id::tone, id::dynamics, id::release, id::keyNoise, id::pedNoise, id::roomMix, id::width, id::volume },
-                        juce::StringArray { id::tune, id::transpose, id::velCurve, id::a4ref, id::softAmt, id::roomSize, id::roomDamp, id::roomOn },
+    // banchi per i profili dei controller: A gli 8 SFZ CONTROLS, B suono, C pedali e stanza, D motore e accordatura
+    juce::StringArray bankA;
+    for (int i = 0; i < numSlots; ++i) bankA.add (id::sfzSlot (i));
+    midiMap.setBanks ({ bankA,
+                        juce::StringArray { id::tone, id::tune, id::transpose, id::velCurve, id::roomMix, id::width, id::volume, id::a4ref },
                         juce::StringArray { id::pedal, id::soft, id::softAmt, id::roomOn, id::roomSize, id::roomDamp, id::roomMix, id::volume },
-                        juce::StringArray { id::volume, id::roomMix, id::tone, id::release, id::dynamics, id::width, id::pedal, id::soft } });
+                        juce::StringArray { id::quality, id::poly, id::temper, id::temperKey, id::tune, id::a4ref, id::transpose, id::volume } });
 
-    engine.onStatusChanged = [this] { notify(); };
+    engine.setPolyphony (polyphony ((int) poly->load()));
+    engine.setTemperament ((int) temper->load());
+    engine.onStatusChanged = [this] { engineChanged(); };
     library.onProgress = [this] { notify(); };
     library.onInstalled = [this] (const juce::File& f) { loadPiano (f); };
 
     if (const auto f = SampleLibrary::locate(); f.existsAsFile()) engine.loadAsync (f);
+    startTimerHz (20);
+}
+
+void RikyProcessor::engineChanged()
+{
+    // file nuovo (non quello del progetto salvato): gli SFZ CONTROLS partono dai valori scritti nel file
+    if (engine.status() == PianoEngine::Status::ready)
+        if (const auto inf = engine.info(); inf != nullptr && inf->file.getFullPathName() != slotsFile)
+            resetSfzControls();
+    notify();
+}
+
+void RikyProcessor::resetSfzControls()
+{
+    const auto inf = engine.info();
+    if (inf == nullptr) return;
+    for (int i = 0; i < (int) inf->controls.size(); ++i)
+        if (auto* p = state.getParameter (id::sfzSlot (i)))
+            p->setValueNotifyingHost (inf->controls[(size_t) i].defaultValue);
+    slotsFile = inf->file.getFullPathName();
+}
+
+void RikyProcessor::timerCallback()
+{
+    // impostazioni che sfizz accetta solo dal thread di controllo
+    engine.setPolyphony (polyphony ((int) poly->load()));
+    engine.setTemperament ((int) temper->load());
+    // CC arrivati dal MIDI per gli SFZ CONTROLS: il pannello e l'automazione li seguono
+    for (int i = 0; i < numSlots; ++i)
+        if (const float v = engine.takeIncomingSlot (i); v >= 0.f)
+            if (auto* p = state.getParameter (id::sfzSlot (i))) p->setValueNotifyingHost (v);
 }
 
 RikyProcessor::~RikyProcessor()
 {
+    stopTimer();
     engine.onStatusChanged = nullptr;
     library.onProgress = nullptr;
     library.onInstalled = nullptr;
@@ -101,8 +139,19 @@ void RikyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBu
     s.pedalButton = pedal->load() > .5f;
     s.softButton = soft->load() > .5f;
     s.softAmount = softAmt->load();
-    s.dynamics = dynamics->load(); s.release = release->load(); s.keyNoise = keyNoise->load(); s.pedNoise = pedNoise->load();
+    for (int i = 0; i < numSlots; ++i) s.slots[(size_t) i] = slots[(size_t) i]->load();
+    s.quality = sampleQuality ((int) quality->load());
+    s.temperKey = (int) temperKey->load();
     s.offline = isNonRealtime();
+    if (auto* ph = getPlayHead())
+        if (const auto pos = ph->getPosition())
+        {
+            s.hasTransport = true;
+            s.playing = pos->getIsPlaying();
+            if (const auto b = pos->getBpm()) s.bpm = *b;
+            if (const auto p = pos->getPpqPosition()) s.ppq = *p;
+            if (const auto t = pos->getTimeSignature()) { s.sigNum = t->numerator; s.sigDen = t->denominator; }
+        }
     engine.render (buffer, midi, s);
 
     const int chans = juce::jmin (2, buffer.getNumChannels());
@@ -186,6 +235,7 @@ void RikyProcessor::loadPiano (const juce::File& sfz)
 {
     if (! sfz.existsAsFile()) return;
     SampleLibrary::saveSfz (sfz);
+    SampleLibrary::addRecent (sfz);
     engine.loadAsync (sfz);
 }
 
@@ -194,6 +244,7 @@ void RikyProcessor::getStateInformation (juce::MemoryBlock& dest)
 {
     auto st = state.copyState();
     st.setProperty ("sfz", engine.currentFile().getFullPathName(), nullptr);
+    st.setProperty ("slotsFile", slotsFile, nullptr);
     st.removeChild (st.getChildWithName ("MIDIMAP"), nullptr);
     st.appendChild (midiMap.toValueTree(), nullptr);
     if (auto xml = st.createXml()) copyXmlToBinary (*xml, dest);
@@ -210,6 +261,7 @@ void RikyProcessor::setStateInformation (const void* data, int size)
         st.removeChild (mm, nullptr);
     }
     const auto path = st.getProperty ("sfz", {}).toString();
+    slotsFile = st.getProperty ("slotsFile", {}).toString();
     state.replaceState (st);
     // il progetto può venire da un altro computer: se il percorso salvato non esiste si usa quello di questo computer
     if (path.isNotEmpty() && juce::File::isAbsolutePath (path) && juce::File (path).existsAsFile() && juce::File (path) != engine.currentFile())

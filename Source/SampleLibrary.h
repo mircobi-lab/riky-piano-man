@@ -32,6 +32,9 @@ public:
     static juce::File savedSfz();
     static void saveSfz (const juce::File&);
     static juce::File locate();                               // scelto dall'utente, altrimenti cartella predefinita
+    static void addRecent (const juce::File&);                // ultimi file aperti (fino a 10)
+    static juce::Array<juce::File> recent();
+    static juce::Array<juce::File> findAllSfz (const juce::File& folder, int maxFiles = 300);   // libreria: tutti i .sfz della cartella
 
     void startInstall();                                      // download + estrazione in un thread
     void cancel();

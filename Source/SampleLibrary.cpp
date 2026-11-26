@@ -67,6 +67,46 @@ juce::File SampleLibrary::locate()
     return findSfz (installFolder());
 }
 
+void SampleLibrary::addRecent (const juce::File& f)
+{
+    juce::PropertiesFile p (settingsOptions());
+    juce::StringArray list;
+    list.addTokens (p.getValue ("recent"), "\n", {});
+    list.removeString (f.getFullPathName());
+    list.insert (0, f.getFullPathName());
+    list.removeEmptyStrings();
+    while (list.size() > 10) list.remove (list.size() - 1);
+    p.setValue ("recent", list.joinIntoString ("\n"));
+    p.saveIfNeeded();
+}
+
+juce::Array<juce::File> SampleLibrary::recent()
+{
+    juce::PropertiesFile p (settingsOptions());
+    juce::StringArray list;
+    list.addTokens (p.getValue ("recent"), "\n", {});
+    juce::Array<juce::File> out;
+    for (auto& s : list)
+        if (juce::File::isAbsolutePath (s) && juce::File (s).existsAsFile()) out.add (juce::File (s));
+    return out;
+}
+
+juce::Array<juce::File> SampleLibrary::findAllSfz (const juce::File& folder, int maxFiles)
+{
+    juce::Array<juce::File> out;
+    if (! folder.isDirectory()) return out;
+    for (const auto& e : juce::RangedDirectoryIterator (folder, true, "*.sfz", juce::File::findFiles))
+    {
+        // i file in Data/ e simili sono pezzi inclusi da altri .sfz: si tengono quelli in cima alle cartelle degli strumenti
+        if (e.getFile().getParentDirectory().getFileName().equalsIgnoreCase ("Data")) continue;
+        out.add (e.getFile());
+        if (out.size() >= maxFiles) break;
+    }
+    struct ByPath { static int compareElements (const juce::File& a, const juce::File& b) { return a.getFullPathName().compareNatural (b.getFullPathName()); } } cmp;
+    out.sort (cmp);
+    return out;
+}
+
 juce::String SampleLibrary::errorText() const { const juce::ScopedLock sl (lock); return error; }
 
 void SampleLibrary::post (std::function<void()> fn)

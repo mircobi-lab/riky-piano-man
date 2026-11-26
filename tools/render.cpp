@@ -1,5 +1,5 @@
 // Prova del motore senza interfaccia: carica il Maestro Concert Grand con sfizz, suona e controlla il risultato.
-// uso: riky_render "Maestro Concert Grand.sfz" uscita.wav
+// uso: riky_render "Maestro Concert Grand.sfz" uscita.wav [strumento-con-keyswitch.sfz]
 #include "PianoEngine.h"
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <cmath>
@@ -106,6 +106,24 @@ int main (int argc, char** argv)
     if (r.engine.status() != PianoEngine::Status::ready) return 1;
     check (r.engine.numRegions() >= 800, "tutte le regioni del Maestro (attese 804)");
 
+    // informazioni lette dal file: tasti, keyswitch, controlli con nome e valori iniziali
+    const auto inf = r.engine.info();
+    auto slotOf = [&] (int cc) { for (int i = 0; i < (int) inf->controls.size(); ++i) if (inf->controls[(size_t) i].cc == cc) return i; return -1; };
+    {
+        int lo = 128, hi = -1;
+        for (int k = 0; k < 128; ++k) if (inf->keys[(size_t) k]) { lo = juce::jmin (lo, k); hi = juce::jmax (hi, k); }
+        check (lo == 21 && hi == 108 && (int) inf->keys.count() == 88, "tasti che suonano: " + juce::String (lo) + ".." + juce::String (hi) + " (" + juce::String ((int) inf->keys.count()) + ")");
+        check (inf->switches.none(), "nessun keyswitch nel Maestro");
+        juce::String list;
+        for (auto& c : inf->controls) list << c.cc << "=" << c.label << "(" << juce::String (c.defaultValue, 3) << ") ";
+        std::printf ("      controlli: %s\n", list.toRawUTF8());
+        const int rel = slotOf (72), vt = slotOf (99);
+        check (rel >= 0 && std::abs (inf->controls[(size_t) rel].defaultValue - .575f) < .002f, "CC 72 Release con il valore del file (0,575)");
+        check (vt >= 0 && inf->controls[(size_t) vt].label == "Veltrack", "CC 99 Veltrack");
+        check (slotOf (64) < 0 && slotOf (67) < 0, "pedali fuori dagli SFZ CONTROLS");
+        for (int i = 0; i < (int) inf->controls.size(); ++i) r.s.slots[(size_t) i] = inf->controls[(size_t) i].defaultValue;
+    }
+
     // 1-2. intonazione: il motore deve riprodurre la registrazione com'è (il La4 del Maestro è registrato a circa 438 Hz),
     //      e diapason 432 e trasposizione devono spostarla della quantità giusta
     {
@@ -154,11 +172,13 @@ int main (int argc, char** argv)
     }
     // 5. rumore di rilascio dei tasti (regioni trigger=release): con KEY NOISE a zero il rilascio è più pulito
     {
-        r.s.release = .1f;
+        const int rel = slotOf (72), key = slotOf (80);
+        const float relDef = r.s.slots[(size_t) rel], keyDef = r.s.slots[(size_t) key];
+        r.s.slots[(size_t) rel] = .1f;
         auto withNoise = r.play (2.0, { { .0, on (40, 100) }, { .6, off (40) } });
-        r.s.keyNoise = 0.f;
+        r.s.slots[(size_t) key] = 0.f;
         auto without = r.play (2.0, { { .0, on (40, 100) }, { .6, off (40) } });
-        r.s.keyNoise = 1.f; r.s.release = .575f;
+        r.s.slots[(size_t) key] = keyDef; r.s.slots[(size_t) rel] = relDef;
         const float a = rms (withNoise, .8, 1.4), b = rms (without, .8, 1.4);
         check (a > b * 2.f, "rumore di rilascio del tasto presente (" + juce::String (juce::Decibels::gainToDecibels (a / juce::jmax (1e-9f, b)), 1) + " dB)");
     }
@@ -194,6 +214,82 @@ int main (int argc, char** argv)
         r.s.transpose = 0;
         check (rms (b, 2.5, 3.0) < rms (a, .2, .5) * .05f, "nessuna nota bloccata cambiando trasposizione");
     }
+    // 9. temperamenti: scarto di Mi rispetto a Do, confrontato con l'equabile (stesso campione, quindi misura relativa)
+    {
+        auto measure = [&] (int note, double lo, double hi)
+        {
+            auto b = r.play (1.6, { { .0, on (note, 90) }, { 1.2, off (note) } });
+            return peakFreq (b, .3, .6, lo, hi);
+        };
+        const double cEq = measure (60, 250, 272), eEq = measure (64, 318, 342);
+        r.engine.setTemperament (1);   // Werckmeister III, tonica Do
+        const double cW = measure (60, 250, 272), eW = measure (64, 318, 342);
+        const double dW = cents (eW, eEq) - cents (cW, cEq);
+        check (std::abs (dW - (-9.775)) < 1.0, "Werckmeister III in Do: Mi rispetto a Do " + juce::String (dW, 2) + " cent (atteso -9,78)");
+        std::printf ("      riferimento: Do %+.2f cent, Mi %+.2f cent rispetto all'equabile\n", cents (cW, cEq), cents (eW, eEq));
+        r.s.temperKey = 2;            // tonica Re: Mi è il secondo grado (-7,82), Do il settimo minore (-3,91)
+        r.play (.05, {});
+        const double cD = measure (60, 250, 272), eD = measure (64, 318, 342);
+        const double dD = cents (eD, eEq) - cents (cD, cEq);
+        check (std::abs (dD - (-3.91)) < 1.0, "Werckmeister III in Re: Mi rispetto a Do " + juce::String (dD, 2) + " cent (atteso -3,91)");
+        r.s.temperKey = 0;
+        r.engine.setTemperament (0);
+        const double cBack = measure (60, 250, 272);
+        check (std::abs (cents (cBack, cEq)) < .5, "ritorno all'equabile");
+    }
+    // 10. SFZ CONTROL Vol (CC 7) a zero: silenzio
+    if (const int vol = slotOf (7); vol >= 0)
+    {
+        const float def = r.s.slots[(size_t) vol];
+        r.s.slots[(size_t) vol] = 0.f;
+        auto b = r.play (1.0, { { .0, on (60, 110) }, { .8, off (60) } });
+        r.s.slots[(size_t) vol] = def;
+        r.play (.5, {});
+        check (rms (b, .0, .5) < 1e-5f, "SFZ CONTROL Vol a zero spegne lo strumento");
+    }
+    // 11. qualità di ricampionamento: suono valido a ogni livello
+    for (int q : { 2, 4, 10 })
+    {
+        r.s.quality = q;
+        auto b = r.play (.6, { { .0, on (69, 100) }, { .5, off (69) } });
+        check (rms (b, .05, .4) > 1e-3f && finite (b), "qualita' " + juce::String (q));
+    }
+    r.s.quality = 4;
+
+    // 12. strumento con keyswitch (file di prova): articolazioni, nomi, trasposizione che non tocca i keyswitch
+    if (argc > 3)
+    {
+        Rig k;
+        k.s.offline = true;
+        k.engine.prepare (sr, block);
+        k.engine.loadAsync (juce::File::getCurrentWorkingDirectory().getChildFile (argv[3]));
+        for (int i = 0; i < 200 && k.engine.status() == PianoEngine::Status::loading; ++i) juce::Thread::sleep (50);
+        const auto ki = k.engine.info();
+        check (ki != nullptr && ki->switches[24] && ki->switches[26] && ki->switchLabels.count (24) && ki->switchLabels.at (24) == "Sine",
+               "keyswitch letti dal file (C1 Sine, D1 Octave)");
+        check (ki != nullptr && ki->defaultSwitch == 24 && k.engine.currentSwitch() == 24, "articolazione iniziale (sw_default)");
+        int lvl = -1;
+        if (ki != nullptr)
+            for (int i = 0; i < (int) ki->controls.size(); ++i)
+            {
+                k.s.slots[(size_t) i] = ki->controls[(size_t) i].defaultValue;
+                if (ki->controls[(size_t) i].cc == 20) lvl = i;
+            }
+        check (lvl >= 0 && ki->controls[(size_t) lvl].label == "Level" && ki->controls[(size_t) lvl].defaultValue > .99f, "controllo con nome: CC 20 Level, valore iniziale 127");
+        k.s.transpose = 3;            // non deve spostare i keyswitch
+        auto a = k.play (1.0, { { .0, on (24, 100) }, { .05, off (24) }, { .1, on (57, 100) }, { .9, off (57) } });
+        check (k.engine.currentSwitch() == 24, "keyswitch C1 attivo");
+        const double f1 = peakFreq (a, .3, .4, 200, 600);
+        auto b = k.play (1.0, { { .0, on (26, 100) }, { .05, off (26) }, { .1, on (57, 100) }, { .9, off (57) } });
+        check (k.engine.currentSwitch() == 26, "keyswitch D1 attivo");
+        const double f2 = peakFreq (b, .3, .4, 200, 600);
+        check (std::abs (cents (f1, 261.626)) < 3 && std::abs (cents (f2, 523.251)) < 3,
+               "articolazioni: A3+3 = C4 " + juce::String (f1, 1) + " Hz, poi un'ottava sopra " + juce::String (f2, 1) + " Hz");
+        if (lvl >= 0) k.s.slots[(size_t) lvl] = 0.f;
+        auto c = k.play (.6, { { .0, on (57, 100) }, { .5, off (57) } });
+        check (rms (c, .1, .4) < 1e-5f, "CC 20 a zero spegne (amplitude_oncc20)");
+    }
+
     check (finite (r.out), "nessun NaN o infinito");
 
     juce::File wav = juce::File::getCurrentWorkingDirectory().getChildFile (argv[2]);

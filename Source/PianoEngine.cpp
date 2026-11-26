@@ -1,18 +1,121 @@
 #include "PianoEngine.h"
-#include "Params.h"
 #include <sfizz.hpp>
-#include <juce_events/juce_events.h>
+#include <sfizz_message.h>
 
 namespace riky
 {
+// ------------------------------------------------------------------------------------------------ lettura delle informazioni
 namespace
 {
-    constexpr int maxVoices = 128;
+    // risposte di sfizz alle domande sul file caricato (protocollo a messaggi tipo OSC)
+    struct Reply
+    {
+        char type = 0;
+        int i = 0, i2 = 0;
+        float f = 0.f;
+        std::string s;
+        std::vector<uint8_t> blob;
+
+        static void receive (void* data, int, const char*, const char* sig, const sfizz_arg_t* args)
+        {
+            auto& r = *static_cast<Reply*> (data);
+            r.type = sig != nullptr && sig[0] != 0 ? sig[0] : 'N';
+            if (r.type == 'i') { r.i = args[0].i; if (sig[1] == 'i') r.i2 = args[1].i; }
+            else if (r.type == 'f') r.f = args[0].f;
+            else if (r.type == 's') r.s = args[0].s != nullptr ? args[0].s : "";
+            else if (r.type == 'b' && args[0].b != nullptr) r.blob.assign (args[0].b->data, args[0].b->data + args[0].b->size);
+        }
+    };
+
+    std::bitset<128> toBits (const std::vector<uint8_t>& b)
+    {
+        std::bitset<128> bits;
+        for (size_t i = 0; i < 128 && i / 8 < b.size(); ++i)
+            if (b[i / 8] & (1u << (i % 8))) bits.set (i);
+        return bits;
+    }
 }
 
+std::shared_ptr<InstrumentInfo> PianoEngine::readInfo (sfz::Sfizz& s, const juce::File& f)
+{
+    auto info = std::make_shared<InstrumentInfo>();
+    info->file = f;
+    info->name = f.getFileNameWithoutExtension();
+    info->regions = s.getNumRegions();
+    info->groups = s.getNumGroups();
+    info->masters = s.getNumMasters();
+    info->curves = s.getNumCurves();
+
+    Reply r;
+    auto client = sfz::Sfizz::createClient (&r);
+    sfz::Sfizz::setReceiveCallback (*client, &Reply::receive);
+    // questa istanza non è ancora usata dal thread audio: qui si può interrogare
+    auto ask = [&] (const std::string& path) -> Reply&
+    {
+        r = Reply();
+        s.sendMessage (*client, 0, path.c_str(), "", nullptr);
+        return r;
+    };
+
+    if (auto& a = ask ("/num_samples"); a.type == 'i') info->samples = a.i;
+    // tasti che suonano: le regioni che partono con una nota (le regioni attivate da un CC, come i rumori
+    // dei pedali, coprono di solito tutta la tastiera e non contano)
+    for (int i = 0; i < info->regions; ++i)
+        if (auto& t = ask ("/region" + std::to_string (i) + "/trigger_on_note"); t.type == 'T')
+            if (auto& k = ask ("/region" + std::to_string (i) + "/key_range"); k.type == 'i')
+                for (int n = juce::jlimit (0, 127, k.i); n <= juce::jlimit (0, 127, k.i2); ++n) info->keys.set ((size_t) n);
+    if (info->keys.none())
+        if (auto& a = ask ("/key/slots"); a.type == 'b') info->keys = toBits (a.blob);
+    if (auto& a = ask ("/sw/last/slots"); a.type == 'b') info->switches = toBits (a.blob);
+    if (auto& a = ask ("/sw/last/current"); a.type == 'i') info->defaultSwitch = a.i;
+    if (auto& a = ask ("/image"); a.type == 's') info->image = juce::String::fromUTF8 (a.s.c_str());
+    for (int k = 0; k < 128; ++k)
+    {
+        if (info->switches[(size_t) k])
+            if (auto& a = ask ("/sw/last/" + std::to_string (k) + "/label"); a.type == 's' && ! a.s.empty())
+                info->switchLabels[k] = juce::String::fromUTF8 (a.s.c_str());
+        if (auto& a = ask ("/key" + std::to_string (k) + "/label"); a.type == 's' && ! a.s.empty())
+            info->keyLabels[k] = juce::String::fromUTF8 (a.s.c_str());
+    }
+
+    // SFZ CONTROLS: i CC con un nome (label_cc), tranne i pedali e i messaggi di modo canale
+    std::vector<std::pair<int, juce::String>> ccs;
+    for (const auto& [cc, label] : s.getCCLabels())
+        if (cc < 120 && cc != pedalCC::sustain && cc != pedalCC::sostenuto && cc != pedalCC::soft)
+            ccs.push_back ({ (int) cc, juce::String::fromUTF8 (label.c_str()).trim() });
+    // nessun nome: i CC usati dal file
+    if (ccs.empty())
+        if (auto& a = ask ("/cc/slots"); a.type == 'b')
+            for (int cc = 0; cc < 120; ++cc)
+                if ((size_t) cc / 8 < a.blob.size() && (a.blob[(size_t) cc / 8] & (1u << (cc % 8)))
+                    && cc != pedalCC::sustain && cc != pedalCC::sostenuto && cc != pedalCC::soft)
+                    ccs.push_back ({ cc, "CC " + juce::String (cc) });
+    std::sort (ccs.begin(), ccs.end(), [] (auto& a, auto& b) { return a.first < b.first; });
+    for (auto& [cc, label] : ccs)
+    {
+        if ((int) info->controls.size() >= numSlots) break;
+        InstrumentInfo::Control c;
+        c.cc = cc;
+        c.label = label.isNotEmpty() ? label : "CC " + juce::String (cc);
+        if (auto& a = ask ("/cc" + std::to_string (cc) + "/default"); a.type == 'f') c.defaultValue = juce::jlimit (0.f, 1.f, a.f);
+        info->controls.push_back (c);
+    }
+    return info;
+}
+
+void PianoEngine::applyTemperament (sfz::Sfizz& s, int index)
+{
+    auto scala = temperamentScala (index);
+    if (scala.empty()) scala = "! equal.scl\nEqual temperament\n 12\n!\n 100.\n 200.\n 300.\n 400.\n 500.\n 600.\n 700.\n 800.\n 900.\n 1000.\n 1100.\n 2/1\n";
+    s.loadScalaString (scala);
+}
+
+// ------------------------------------------------------------------------------------------------ ciclo di vita
 PianoEngine::PianoEngine()
 {
     playedAs.fill (-1);
+    for (auto& c : slotCC) c.store (-1);
+    for (auto& v : incoming) v.store (-1.f);
 }
 
 PianoEngine::~PianoEngine()
@@ -39,7 +142,6 @@ float PianoEngine::shapeVelocity (float v, int curve, bool soft, float softAmoun
     return juce::jlimit (1.f / 127.f, 1.f, v);
 }
 
-// ------------------------------------------------------------------------------------------------ thread dei messaggi
 void PianoEngine::prepare (double sampleRate, int maxBlock)
 {
     maxBlock = juce::jmax (32, maxBlock);
@@ -54,6 +156,20 @@ void PianoEngine::prepare (double sampleRate, int maxBlock)
         synth->setSamplesPerBlock (maxBlock);
     }
     resetAudioState();
+}
+
+void PianoEngine::setPolyphony (int n)
+{
+    if (polyVoices.exchange (n) == n) return;
+    const juce::SpinLock::ScopedLockType sl (swapLock);   // il thread audio salta questo blocco
+    if (synth != nullptr) synth->setNumVoices (n);
+}
+
+void PianoEngine::setTemperament (int index)
+{
+    if (temperament.exchange (index) == index) return;
+    const juce::SpinLock::ScopedLockType sl (swapLock);
+    if (synth != nullptr) applyTemperament (*synth, index);
 }
 
 void PianoEngine::setStatus (Status s, const juce::String& err)
@@ -71,6 +187,7 @@ void PianoEngine::setStatus (Status s, const juce::String& err)
 
 juce::String PianoEngine::errorText() const { const juce::ScopedLock sl (textLock); return error; }
 juce::File PianoEngine::currentFile() const { const juce::ScopedLock sl (textLock); return file; }
+std::shared_ptr<const InstrumentInfo> PianoEngine::info() const { const juce::ScopedLock sl (textLock); return infoPtr; }
 
 void PianoEngine::loadAsync (const juce::File& sfz)
 {
@@ -88,19 +205,25 @@ void PianoEngine::loadAsync (const juce::File& sfz)
         const double rate = preparedRate.load();
         s->setSampleRate ((float) rate);
         s->setSamplesPerBlock (preparedBlock.load());
-        s->setNumVoices (maxVoices);
+        s->setNumVoices (polyVoices.load());
         juce::String err;
+        std::shared_ptr<InstrumentInfo> inf;
         if (! sfz.existsAsFile())
             err = "FILE NOT FOUND";
         else if (! s->loadSfzFile (sfz.getFullPathName().toStdString()))
             err = "CANNOT READ THE SFZ FILE";
         else if (s->getNumRegions() == 0)
             err = "NO REGIONS IN THE SFZ FILE";
-        finishLoad (err.isEmpty() ? std::move (s) : nullptr, sfz, err, gen, rate);
+        else
+        {
+            inf = readInfo (*s, sfz);
+        }
+        finishLoad (err.isEmpty() ? std::move (s) : nullptr, inf, sfz, err, gen, rate);
     });
 }
 
-void PianoEngine::finishLoad (std::unique_ptr<sfz::Sfizz> fresh, const juce::File& f, const juce::String& err, int gen, double loadedRate)
+void PianoEngine::finishLoad (std::unique_ptr<sfz::Sfizz> fresh, std::shared_ptr<InstrumentInfo> inf, const juce::File& f,
+                              const juce::String& err, int gen, double loadedRate)
 {
     if (gen != generation.load()) return;   // nel frattempo è stato chiesto un altro file
     if (fresh == nullptr)
@@ -111,11 +234,18 @@ void PianoEngine::finishLoad (std::unique_ptr<sfz::Sfizz> fresh, const juce::Fil
     const int n = fresh->getNumRegions();
     {
         const juce::SpinLock::ScopedLockType sl (swapLock);
-        // la frequenza può essere cambiata durante il caricamento
+        // frequenza, polifonia e temperamento possono essere cambiati durante il caricamento
         if (! juce::approximatelyEqual (preparedRate.load(), loadedRate))
             fresh->setSampleRate ((float) preparedRate.load());
         fresh->setSamplesPerBlock (preparedBlock.load());
+        if (fresh->getNumVoices() != polyVoices.load()) fresh->setNumVoices (polyVoices.load());
+        applyTemperament (*fresh, temperament.load());   // la nuova istanza non suona ancora: si può
         std::swap (synth, fresh);
+        for (int i = 0; i < numSlots; ++i)
+            slotCC[(size_t) i].store (i < (int) inf->controls.size() ? inf->controls[(size_t) i].cc : -1);
+        switchKeys = inf->switches;
+        freshDefaultSwitch = inf->defaultSwitch;
+        switchValue.store (inf->defaultSwitch);
         freshSynth.store (true);
     }
     fresh.reset();   // la vecchia istanza si chiude qui, fuori dal thread audio
@@ -123,6 +253,7 @@ void PianoEngine::finishLoad (std::unique_ptr<sfz::Sfizz> fresh, const juce::Fil
     {
         const juce::ScopedLock sl (textLock);
         file = f;
+        infoPtr = inf;
     }
     setStatus (Status::ready);
 }
@@ -135,12 +266,15 @@ void PianoEngine::unload()
     {
         const juce::SpinLock::ScopedLockType sl (swapLock);
         std::swap (synth, old);
+        for (auto& c : slotCC) c.store (-1);
+        switchKeys.reset();
     }
     old.reset();
     regions.store (0);
     {
         const juce::ScopedLock sl (textLock);
         file = juce::File();
+        infoPtr.reset();
     }
     setStatus (Status::empty);
 }
@@ -149,10 +283,13 @@ void PianoEngine::unload()
 void PianoEngine::resetAudioState() noexcept
 {
     playedAs.fill (-1);
+    seenParam.fill (-1.f);
     cc64 = cc67 = 0;
-    sentSustain = sentLid = -1;
-    sentDyn = sentRel = sentKey = sentPed = sentTuning = -1.f;
+    sentSustain = sentLid = sentQuality = sentRootKey = -1;
+    sentTuning = -1.f;
+    sentBpm = -1.0; sentNum = sentDen = -1;
     freewheel = false;
+    wasPlaying = false;
 }
 
 void PianoEngine::render (juce::AudioBuffer<float>& buffer, const juce::MidiBuffer& midi, const EngineSettings& s) noexcept
@@ -165,13 +302,17 @@ void PianoEngine::render (juce::AudioBuffer<float>& buffer, const juce::MidiBuff
         return;
     }
     auto& sy = *synth;
-    if (freshSynth.exchange (false)) resetAudioState();
+    if (freshSynth.exchange (false))
+    {
+        resetAudioState();
+        switchValue.store (freshDefaultSwitch);
+    }
 
     if (panicRequest.exchange (false))
     {
         // pedali su prima di spegnere: così anche il rumore di "pedale su" viene spento subito
-        if (sentSustain != 0) sy.cc (0, maestroCC::sustain, 0);
-        if (sentLid != 0) sy.cc (0, maestroCC::lid, 0);
+        if (sentSustain != 0) sy.cc (0, pedalCC::sustain, 0);
+        if (sentLid != 0) sy.cc (0, pedalCC::soft, 0);
         sy.allSoundOff();
         playedAs.fill (-1);
         cc64 = cc67 = 0;
@@ -182,20 +323,38 @@ void PianoEngine::render (juce::AudioBuffer<float>& buffer, const juce::MidiBuff
         freewheel = s.offline;
         if (freewheel) sy.enableFreeWheeling(); else sy.disableFreeWheeling();
     }
+    if (s.quality != sentQuality) { sy.setSampleQuality (sfz::Sfizz::ProcessLive, s.quality); sentQuality = s.quality; }
+    if (s.temperKey != sentRootKey) { sy.setScalaRootKey (60 + s.temperKey); sentRootKey = s.temperKey; }
+
+    // trasporto dell'host
+    if (s.hasTransport)
+    {
+        if (! juce::approximatelyEqual (s.bpm, sentBpm) && s.bpm > 0) { sy.bpmTempo (0, (float) s.bpm); sentBpm = s.bpm; }
+        if (s.sigNum != sentNum || s.sigDen != sentDen) { sy.timeSignature (0, s.sigNum, s.sigDen); sentNum = s.sigNum; sentDen = s.sigDen; }
+        if (s.playing)
+        {
+            const double beatsPerBar = s.sigNum * 4.0 / juce::jmax (1, s.sigDen);
+            const int bar = (int) std::floor (s.ppq / beatsPerBar);
+            sy.timePosition (0, bar, s.ppq - bar * beatsPerBar);
+        }
+        if (s.playing != wasPlaying) { sy.playbackState (0, s.playing ? 1 : 0); wasPlaying = s.playing; }
+    }
 
     // parametri del pannello verso lo strumento, solo quando cambiano
     if (const float t = s.a4 * std::pow (2.f, s.cents / 1200.f); ! juce::approximatelyEqual (t, sentTuning)) { sy.setTuningFrequency (t); sentTuning = t; }
-    if (! juce::approximatelyEqual (s.dynamics, sentDyn)) { sy.hdcc (0, maestroCC::veltrack, s.dynamics); sentDyn = s.dynamics; }
-    if (! juce::approximatelyEqual (s.release, sentRel))  { sy.hdcc (0, maestroCC::release, s.release);   sentRel = s.release; }
-    if (! juce::approximatelyEqual (s.keyNoise, sentKey)) { sy.hdcc (0, maestroCC::keyNoise, s.keyNoise); sentKey = s.keyNoise; }
-    if (! juce::approximatelyEqual (s.pedNoise, sentPed)) { sy.hdcc (0, maestroCC::pedNoise, s.pedNoise); sentPed = s.pedNoise; }
+    for (int i = 0; i < numSlots; ++i)
+        if (const int cc = slotCC[(size_t) i].load(); cc >= 0 && ! juce::approximatelyEqual (s.slots[(size_t) i], seenParam[(size_t) i]))
+        {
+            sy.hdcc (0, cc, s.slots[(size_t) i]);
+            seenParam[(size_t) i] = s.slots[(size_t) i];
+        }
 
     auto updatePedals = [&] (int delay)
     {
         const int sus = juce::jmax (cc64, s.pedalButton ? 127 : 0);
-        if (sus != sentSustain) { sy.cc (delay, maestroCC::sustain, sus); sentSustain = sus; }
+        if (sus != sentSustain) { sy.cc (delay, pedalCC::sustain, sus); sentSustain = sus; }
         const int lid = juce::jmax (cc67, s.softButton ? 127 : 0);
-        if (lid != sentLid) { sy.cc (delay, maestroCC::lid, lid); sentLid = lid; }
+        if (lid != sentLid) { sy.cc (delay, pedalCC::soft, lid); sentLid = lid; }
     };
     updatePedals (0);
 
@@ -215,6 +374,15 @@ void PianoEngine::render (juce::AudioBuffer<float>& buffer, const juce::MidiBuff
             if (m.isNoteOn())
             {
                 const int key = m.getNoteNumber();
+                if (switchKeys[(size_t) key])
+                {
+                    // keyswitch: niente trasposizione né curva, cambia articolazione
+                    if (playedAs[(size_t) key] >= 0) sy.noteOff (delay, playedAs[(size_t) key], 0);
+                    playedAs[(size_t) key] = key;
+                    sy.noteOn (delay, key, m.getVelocity());
+                    switchValue.store (key);
+                    continue;
+                }
                 const int n = key + s.transpose;
                 if (n < 0 || n > 127) continue;
                 if (playedAs[(size_t) key] >= 0) sy.noteOff (delay, playedAs[(size_t) key], 0);
@@ -234,16 +402,26 @@ void PianoEngine::render (juce::AudioBuffer<float>& buffer, const juce::MidiBuff
             else if (m.isController())
             {
                 const int c = m.getControllerNumber(), v = m.getControllerValue();
-                if (c == maestroCC::sustain) { cc64 = v; updatePedals (delay); }
-                else if (c == maestroCC::lid) { cc67 = v; updatePedals (delay); }
-                else if (c == maestroCC::release || c == maestroCC::keyNoise || c == maestroCC::pedNoise || c == maestroCC::veltrack) {}   // decide il pannello
+                if (c == pedalCC::sustain) { cc64 = v; updatePedals (delay); }
+                else if (c == pedalCC::soft) { cc67 = v; updatePedals (delay); }
                 else if (c == 120) { sy.allSoundOff(); playedAs.fill (-1); }   // i pedali restano come sono
                 else if (c == 123) { for (auto& p : playedAs) if (p >= 0) { sy.noteOff (delay, p, 0); p = -1; } }
                 else if (c == 121) { cc64 = cc67 = 0; updatePedals (delay); sy.cc (delay, c, v); }
-                else sy.cc (delay, c, v);
+                else
+                {
+                    sy.cc (delay, c, v);
+                    for (int i = 0; i < numSlots; ++i)      // il controllo sul pannello segue il MIDI
+                        if (slotCC[(size_t) i].load() == c) incoming[(size_t) i].store ((float) v / 127.f);
+                }
             }
             else if (m.isPitchWheel())
                 sy.pitchWheel (delay, m.getPitchWheelValue() - 8192);
+            else if (m.isChannelPressure())
+                sy.channelAftertouch (delay, m.getChannelPressureValue());
+            else if (m.isAftertouch())
+                sy.polyAftertouch (delay, m.getNoteNumber() + s.transpose, m.getAfterTouchValue());
+            else if (m.isProgramChange())
+                sy.programChange (delay, m.getProgramChangeNumber());
         }
 
         float* outs[2];

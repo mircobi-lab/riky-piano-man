@@ -1,6 +1,6 @@
 /*  Applicazione Standalone di Riky Piano Man con lo stile MBStudio anche per finestra, menu e dialoghi.
     - al primo avvio abilita tutti gli ingressi MIDI collegati (tastiere e controller);
-    - argomenti di prova: --sfz FILE.sfz  --install  --shot FILE.png  (salva un'immagine del pannello ed esce)        */
+    - argomenti di prova: --sfz FILE.sfz  --install  --param ID=VALORE  --shot FILE.png  (salva un'immagine del pannello ed esce)        */
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include <juce_audio_plugin_client/juce_audio_plugin_client.h>
@@ -63,6 +63,9 @@ public:
             if (a == "--sfz") proc->loadPiano (juce::File (v));
             else if (a == "--shot") shot = v;
             else if (a == "--install") installing = true;
+            else if (a == "--param")   // --param ID=valore (valore reale del parametro)
+                if (auto* prm = dynamic_cast<juce::RangedAudioParameter*> (proc->state.getParameter (v.upToFirstOccurrenceOf ("=", false, false))))
+                    prm->setValueNotifyingHost (prm->convertTo0to1 (v.fromFirstOccurrenceOf ("=", false, false).getFloatValue()));
             else if (a == "--profile") proc->midiMap.applyProfile (v.getIntValue());
             else if (a == "--learn") proc->midiMap.setLearnMode (true);
         }

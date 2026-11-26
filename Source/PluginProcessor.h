@@ -6,7 +6,7 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <juce_dsp/juce_dsp.h>
 
-class RikyProcessor : public juce::AudioProcessor
+class RikyProcessor : public juce::AudioProcessor, private juce::Timer
 {
 public:
     RikyProcessor();
@@ -37,7 +37,8 @@ public:
     void setStateInformation (const void*, int) override;
 
     // ---- thread dei messaggi
-    void loadPiano (const juce::File& sfz);          // un file .sfz del Maestro (o un altro SFZ)
+    void loadPiano (const juce::File& sfz);          // un file .sfz: il Maestro o qualsiasi altro strumento SFZ
+    void resetSfzControls();                         // SFZ CONTROLS ai valori scritti nel file
     void installPiano() { library.startInstall(); }
 
     float outputLevel() const noexcept { return level.load(); }
@@ -55,7 +56,7 @@ public:
 
 private:
     std::atomic<float>* tone = nullptr, *tune = nullptr, *transpose = nullptr, *a4ref = nullptr, *velCurve = nullptr,
-                       *dynamics = nullptr, *release = nullptr, *keyNoise = nullptr, *pedNoise = nullptr,
+                       *quality = nullptr, *poly = nullptr, *temper = nullptr, *temperKey = nullptr,
                        *pedal = nullptr, *soft = nullptr, *softAmt = nullptr,
                        *roomOn = nullptr, *roomSize = nullptr, *roomDamp = nullptr, *roomMix = nullptr, *width = nullptr, *volume = nullptr;
 
@@ -68,6 +69,11 @@ private:
     juce::SmoothedValue<float> gain, wet, widthSm;
     juce::AudioBuffer<float> dry;
     std::atomic<float> level { 0.f };
+    std::array<std::atomic<float>*, riky::numSlots> slots {};
+    juce::String slotsFile;      // file a cui si riferiscono i valori degli SFZ CONTROLS (altrimenti si usano i valori del file)
+
+    void timerCallback() override;
+    void engineChanged();
 
     void updateTone (float t);
     void notify();

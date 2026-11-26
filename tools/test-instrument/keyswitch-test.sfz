@@ -1,0 +1,12 @@
+// Strumento di prova per riky_render: due articolazioni con keyswitch (C1 e D1) e un controllo con nome (CC 20)
+<control>
+label_cc20=Level
+set_cc20=127
+<global>
+sw_lokey=24 sw_hikey=26 sw_default=24
+amplitude_oncc20=100
+ampeg_release=0.05
+<group> sw_last=24 sw_label=Sine
+<region> sample=sine_c4.wav lokey=36 hikey=84 pitch_keycenter=60
+<group> sw_last=26 sw_label=Octave
+<region> sample=sine_c4.wav lokey=36 hikey=84 pitch_keycenter=48

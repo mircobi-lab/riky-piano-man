@@ -32,8 +32,8 @@ jobs:
         run: |
           git clone -q https://github.com/sfzinstruments/MatsHelgesson.MaestroConcertGrandPiano maestro
           git -C maestro checkout -q 717078b450eccc4a7733755f4b5973426ebc23e9
-      - name: Prova (intonazione, 432 Hz, trasposizione, velocity, pedali, rumori di rilascio, 88 tasti, PANIC)
-        run: ./build/riky_render_artefacts/Release/riky_render "maestro/Maestro Concert Grand.sfz" prova.wav
+      - name: Prova (intonazione, 432 Hz, temperamenti, velocity, pedali, rilasci, 88 tasti, PANIC, SFZ CONTROLS, keyswitch)
+        run: ./build/riky_render_artefacts/Release/riky_render "maestro/Maestro Concert Grand.sfz" prova.wav tools/test-instrument/keyswitch-test.sfz
       - uses: actions/upload-artifact@v4
         with:
           name: prova-audio
