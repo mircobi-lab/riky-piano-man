@@ -107,6 +107,15 @@ jobs:
           $pv = (Get-ChildItem -Recurse pv -Filter pluginval.exe | Select-Object -First 1).FullName
           & $pv --strictness-level 10 --validate-in-process --skip-gui-tests "build/RikyPianoMan_artefacts/Release/VST3/Riky Piano Man.vst3"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Installer accessibile (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          $r = (Resolve-Path "build/RikyPianoMan_artefacts/Release").Path
+          & $iscc "/DAppVersion=1.0.${{ github.run_number }}" "/DBuildDir=$r" "installer\RikyPianoMan.iss"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Move-Item installer\RikyPianoMan-Setup-win.exe .
       - name: Comprimi
         shell: pwsh
         run: |
@@ -116,7 +125,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: windows
-          path: RikyPianoMan-*.zip
+          path: |
+            RikyPianoMan-*.zip
+            RikyPianoMan-Setup-win.exe
 
   release:
     name: Pubblica in Releases
@@ -150,25 +161,24 @@ jobs:
           body: |
             Compilato automaticamente da GitHub dal commit ${{ github.sha }}.
 
+            **Windows (per Riky)**
+            - RikyPianoMan-Setup-win.exe: installer in italiano, accessibile con NVDA, JAWS e Assistente vocale. Installa l'app, il plugin VST3, la guida e i collegamenti nel menu Start e sul desktop.
+              Non è firmato: se Windows SmartScreen lo blocca, scegli "Ulteriori informazioni" e poi "Esegui comunque".
+            - RikyPianoMan-VST3-win.zip e RikyPianoMan-App-win.zip: gli stessi file senza installer.
+
             **Mac** (Intel e Apple Silicon, macOS 11 o successivo)
-            - RikyPianoMan-VST3-mac.zip: estrai e copia in ~/Library/Audio/Plug-Ins/VST3/
-            - RikyPianoMan-AU-mac.zip: estrai e copia in ~/Library/Audio/Plug-Ins/Components/
-            - RikyPianoMan-App-mac.zip: versione autonoma, va in Applicazioni
-            Il plugin non è firmato da Apple: dopo averlo copiato, nel Terminale
-            `xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/"Riky Piano Man.vst3" ~/Library/Audio/Plug-Ins/Components/"Riky Piano Man.component" /Applications/"Riky Piano Man.app"`
+            - RikyPianoMan-VST3-mac.zip, RikyPianoMan-AU-mac.zip, RikyPianoMan-App-mac.zip. Non firmati da Apple: dopo averli copiati, nel Terminale
+              `xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/"Riky Piano Man.vst3" ~/Library/Audio/Plug-Ins/Components/"Riky Piano Man.component" /Applications/"Riky Piano Man.app"`
 
-            **Windows** (64 bit)
-            - RikyPianoMan-VST3-win.zip: estrai e copia la cartella "Riky Piano Man.vst3" in C:\Program Files\Common Files\VST3\
-            - RikyPianoMan-App-win.zip: versione autonoma (Riky Piano Man.exe)
-
-            **Il suono** (una volta sola): al primo avvio premi INSTALL. Il plugin scarica circa 256 MB di campioni dal repository ufficiale
-            https://github.com/sfzinstruments/MatsHelgesson.MaestroConcertGrandPiano e li mette in Musica/Riky Piano Man.
+            **Il suono** (una volta sola): al primo avvio il display dice "Non installato": Invio, poi Scarica. Circa 256 MB dal repository ufficiale
+            https://github.com/sfzinstruments/MatsHelgesson.MaestroConcertGrandPiano, salvati in Musica\Riky Piano Man.
             Campioni © Mats Helgesson 2003, conversione SFZ di kinwie: set gratuito, non si può vendere.
 
-            **Accessibilità**: GUIDA-RIKY.txt è la guida per l'uso con VoiceOver o NVDA (comandi da tastiera, registrazione, export, controller MIDI). Nel programma F1 la legge a voce in breve.
+            **Accessibilità**: GUIDA-RIKY.txt è la guida da leggere con NVDA o JAWS e la barra braille. Nel programma F1 dice i comandi principali e il campo Comando accetta parole scritte con la tastiera braille.
 
             **Demo**: RikyPianoMan-demo-Rikys-Theme.mp3 è la demo "Riky's Theme" (brano originale) esportata da GitHub con il plugin, MP3 320 kbps.
           files: |
+            dist/*.exe
             dist/*.zip
             dist/*.mp3
             docs/GUIDA-RIKY.txt

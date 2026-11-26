@@ -617,7 +617,7 @@ MidiControls::MidiControls (MidiMapper& m) : map (m)
     learnBtn.getProperties().set ("ledColour", C::ledAmber.toString());
     learnBtn.onClick = [this] { map.setLearnMode (! map.isLearnMode()); };
     learnBtn.setTitle ("Apprendimento MIDI");
-    learnBtn.setHelpText (juce::CharPointer_UTF8 ("Con il mouse: clic sul controllo e poi muovi il controller. Con la tastiera: seleziona un controllo con Tab e premi Comando M."));
+    learnBtn.setHelpText (juce::CharPointer_UTF8 ("Con il mouse: clic sul controllo e poi muovi il controller. Con la tastiera: seleziona un controllo con Tab e premi Ctrl M (Comando M sul Mac)."));
     learnBtn.setTooltip (learnBtn.getHelpText());
     ctrlBtn.setTitle ("Profili del controller MIDI");
     ctrlBtn.setHelpText (juce::CharPointer_UTF8 ("Profili pronti per i controller più diffusi, mappa predefinita, elenco delle assegnazioni."));

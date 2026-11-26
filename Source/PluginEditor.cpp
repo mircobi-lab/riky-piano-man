@@ -1,5 +1,6 @@
 #include "PluginEditor.h"
 #include "LcdFont.h"
+#include "ScreenReader.h"
 #include <BinaryData.h>
 
 namespace ui = mbstudio::ui;
@@ -502,15 +503,15 @@ void RikyPanel::setupAccessibility()
     struct T { juce::Component* c; const char* title; const char* help; };
     const T items[] = {
         { &installBtn, "Installa il pianoforte", "Scarica i campioni del Maestro Concert Grand dal repository ufficiale, circa 256 megabyte, una volta sola." },
-        { &libraryBtn, "Libreria degli strumenti", "Strumenti recenti, cartella Musica Riky Piano Man, altro file SFZ. Scorciatoia: Comando L." },
+        { &libraryBtn, "Libreria degli strumenti", "Strumenti recenti, cartella Musica Riky Piano Man, altro file SFZ. Scorciatoia: Ctrl L." },
         { &panicBtn,   "Panic, spegne tutte le note", "Scorciatoia: Esc." },
         { &demoBtn,    "Demo, suona Riky's Theme", "Brano originale scritto per questo pianoforte. Scorciatoia: lettera D." },
-        { &loadBtn,    "Apri un file MIDI", "Scorciatoia: Comando O." },
-        { &saveBtn,    "Salva il brano come file MIDI", "Va nella cartella Musica, Riky Piano Man, Songs. Scorciatoia: Comando S." },
+        { &loadBtn,    "Apri un file MIDI", "Scorciatoia: Ctrl O." },
+        { &saveBtn,    "Salva il brano come file MIDI", "Va nella cartella Musica, Riky Piano Man, Songs. Scorciatoia: Ctrl S." },
         { &recBtn,     "Registra", "Registra quello che suoni. Premi di nuovo, oppure S, per fermare. Scorciatoie: R oppure F6." },
         { &playBtn,    "Suona o ferma il brano", "Scorciatoie: barra spaziatrice oppure F5." },
         { &stopBtn,    "Ferma", "Scorciatoia: lettera S." },
-        { &exportBtn,  "Esporta il brano in MP3 o WAV", "Comando E esporta subito in MP3 a 320 kilobit nella cartella Exports, Comando Maiuscole E in WAV." },
+        { &exportBtn,  "Esporta il brano in MP3 o WAV", "Ctrl E esporta subito in MP3 a 320 kilobit nella cartella Exports, Ctrl Maiuscole E in WAV." },
         { &helpBtn,    "Aiuto", "Elenca i comandi da tastiera e apre la guida. Scorciatoie: F1 oppure H." },
         { &statusView, "", "Stato del pianoforte. Invio apre il menu del pianoforte. Scorciatoia per sentirlo da ovunque: I oppure F2." },
         { &songView,   "", "Stato del brano. Dopo un'esportazione, Invio apre la cartella del file." },
@@ -518,8 +519,8 @@ void RikyPanel::setupAccessibility()
     for (auto& t : items)
     {
         if (*t.title != 0) t.c->setTitle (juce::CharPointer_UTF8 (t.title));
-        t.c->setHelpText (juce::CharPointer_UTF8 (t.help));
-        if (auto* tip = dynamic_cast<juce::SettableTooltipClient*> (t.c)) tip->setTooltip (juce::CharPointer_UTF8 (t.help));
+        t.c->setHelpText (keys (juce::CharPointer_UTF8 (t.help)));
+        if (auto* tip = dynamic_cast<juce::SettableTooltipClient*> (t.c)) tip->setTooltip (keys (juce::CharPointer_UTF8 (t.help)));
     }
     // parti solo visive: la tastiera sullo schermo, il LED meter, il velo del MIDI LEARN
     keyboard.setAccessible (false);
@@ -540,11 +541,15 @@ void RikyPanel::focusStart()
         statusView.grabKeyboardFocus();
 }
 
-void RikyPanel::say (const juce::String& text, bool important)
+void RikyPanel::say (const juce::String& rawText, bool important)
 {
-    if (text.isEmpty()) return;
-    juce::AccessibilityHandler::postAnnouncement (text, important ? juce::AccessibilityHandler::AnnouncementPriority::high
-                                                                  : juce::AccessibilityHandler::AnnouncementPriority::medium);
+    if (rawText.isEmpty()) return;
+    const auto text = keys (rawText);
+    // Windows: notifica UI Automation, letta da NVDA, JAWS e Assistente vocale anche in braille.
+    // Mac: annuncio di JUCE, letto da VoiceOver.
+    if (! announceToScreenReader (*this, text, important))
+        juce::AccessibilityHandler::postAnnouncement (text, important ? juce::AccessibilityHandler::AnnouncementPriority::high
+                                                                      : juce::AccessibilityHandler::AnnouncementPriority::medium);
     // prove automatiche: gli annunci finiscono anche in un file
     if (const auto log = juce::SystemStats::getEnvironmentVariable ("RIKY_A11Y_LOG", {}); log.isNotEmpty())
         juce::File (log).appendText (text + "\n");
@@ -671,7 +676,7 @@ void RikyPanel::announceHelp()
 {
     // in breve: l'elenco completo è nella guida, che si legge meglio in braille
     say (juce::CharPointer_UTF8 ("Spazio suona, R registra, S ferma, D demo, Esc panic, I stato, M metronomo, C conteggio, "
-         "più e meno tempo, Comando E esporta MP3. Nel campo Comando scrivi aiuto, oppure guida per la guida completa."));
+         "più e meno tempo, Ctrl E esporta MP3. Nel campo Comando scrivi aiuto, oppure guida per la guida completa."));
 }
 
 // Campo Comando: si scrive una parola con la tastiera (anche braille) e si preme Invio
@@ -712,7 +717,7 @@ void RikyPanel::runCommand (const juce::String& typed)
     else if (is ({ "stato", "info", "i" })) reply = statusText (true) + " " + songText();
     else if (is ({ "aiuto", "help", "?", "h" }))
         reply = juce::CharPointer_UTF8 ("Comandi: suona, ferma, registra, demo, esporta, esporta wav, salva, apri, stato, tempo 90, metronomo, "
-                                        "conteggio 0 1 2, volume -6, trasponi 2, accorda 10, diapason 432, panic, installa, guida");
+                                        "conteggio 0 1 2, volume -6, trasponi 2, accorda 10, diapason 432, panic, installa, audio, guida");
     else if (is ({ "guida" })) { openGuide(); reply = "Guida aperta nell'editor di testo"; }
     else if (is ({ "tempo", "bpm", "t" }))
     {
@@ -755,6 +760,11 @@ void RikyPanel::runCommand (const juce::String& typed)
     else if (is ({ "panic", "panico" })) { panicBtn.triggerClick(); reply = "Panic: note spente"; }
     else if (is ({ "installa", "install" })) { askInstall(); reply = "Installa: finestra di conferma"; }
     else if (is ({ "libreria" })) { showLibraryMenu(); reply = "Libreria: menu aperto"; }
+    else if (is ({ "audio", "midi", "scheda" }))
+    {
+        if (proc.showAudioSettings) { proc.showAudioSettings(); reply = "Audio e MIDI: finestra aperta"; }
+        else reply = "Audio e MIDI: si impostano nel programma musicale";
+    }
     else reply = "Sconosciuto: " + w + ". Scrivi aiuto";
 
     commandReply = reply;
@@ -791,7 +801,7 @@ void RikyPanel::learnFocused (bool forget)
 {
     auto* focused = juce::Component::getCurrentlyFocusedComponent();
     const auto pid = mbstudio::midi::taggedParam (focused);
-    if (pid.isEmpty()) { say ("Seleziona prima con Tab un controllo, poi premi Comando M."); return; }
+    if (pid.isEmpty()) { say ("Seleziona prima con Tab un controllo, poi premi Ctrl M."); return; }
     const auto title = focused->getTitle().isNotEmpty() ? focused->getTitle() : proc.midiMap.paramName (pid);
     if (forget) { proc.midiMap.forget (pid); say ("Assegnazione tolta: " + title + "."); return; }
     proc.midiMap.startLearn (pid);
@@ -857,6 +867,7 @@ bool RikyPanel::keyPressed (const juce::KeyPress& k)
     if (cmd && (code == 'E' || code == 'e')) { quickExport (shift ? Exporter::Format::wav24 : Exporter::Format::mp3_320); return true; }
     if (cmd && (code == 'L' || code == 'l')) { showLibraryMenu(); return true; }
     if (cmd && (code == 'M' || code == 'm')) { learnFocused (shift); return true; }
+    if (cmd && ch == ',' && proc.showAudioSettings) { proc.showAudioSettings(); return true; }
     return false;
 }
 

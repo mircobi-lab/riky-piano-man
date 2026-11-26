@@ -45,7 +45,11 @@ La tastiera si adatta allo strumento: i tasti che non suonano sono grigi, i keys
 
 ## Accessibilità: pensato per Riky, che non vede
 
-Riky Piano Man si usa per intero con un lettore di schermo (VoiceOver su Mac, NVDA, JAWS o Assistente vocale su Windows) e con la sola tastiera. La guida completa, scritta per essere letta riga per riga, è [docs/GUIDA-RIKY.txt](docs/GUIDA-RIKY.txt); il pulsante HELP (o F1) la apre e legge a voce l'elenco dei comandi.
+Riky usa Windows con lettore di schermo e una barra braille Humanware Brailliant BI 40X. Riky Piano Man si usa per intero con NVDA, JAWS o Assistente vocale (e con VoiceOver sul Mac) e con la sola tastiera.
+
+- **Installer per Windows** (`RikyPianoMan-Setup-win.exe`, Inno Setup in italiano): procedura guidata con finestre standard di Windows, installa app, VST3, guida e collegamenti nel menu Start e sul desktop.
+- **Annunci come notifiche UI Automation** su Windows: la libreria JUCE di suo li farebbe dire alla voce SAPI di Windows, sopra NVDA o JAWS e senza braille; qui vanno al lettore di schermo con `UiaRaiseNotificationEvent` (Windows 10 1709 o successivo), quindi voce del lettore e barra braille.
+- **Scorciatoie con Ctrl** su Windows (Comando sul Mac) e finestra Audio e MIDI con Ctrl virgola o con il comando `audio`. La guida completa, scritta per essere letta riga per riga, è [docs/GUIDA-RIKY.txt](docs/GUIDA-RIKY.txt); il pulsante HELP (o F1) la apre e legge a voce l'elenco dei comandi.
 
 - **Nomi e aiuti in italiano** per ogni controllo, con valori detti per esteso ("meno 3 decibel", "100 battiti al minuto", "più 2 semitoni"). I controlli dello strumento prendono il nome scritto nel file SFZ.
 - **Gruppi e ordine di Tab** pensati per l'uso: stato del pianoforte, sequencer, suono, pedali, controlli dello strumento, articolazioni, stanza, uscita, motore, accordatura, controller MIDI. All'apertura il fuoco è sul display dello stato, che si legge come testo; anche lo stato del brano è un testo che si legge con Tab.

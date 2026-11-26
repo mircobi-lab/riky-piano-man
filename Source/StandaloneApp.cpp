@@ -39,6 +39,16 @@ public:
             for (auto& dev : juce::MidiInput::getAvailableDevices())
                 mainWindow->pluginHolder->deviceManager.setMidiInputDeviceEnabled (dev.identifier, true);
         mainWindow->setVisible (true);
+        // finestra Audio e MIDI raggiungibile anche dal pannello (campo Comando "audio", Ctrl virgola)
+        if (auto* p = dynamic_cast<RikyProcessor*> (mainWindow->getAudioProcessor()))
+            p->showAudioSettings = [this] { if (mainWindow != nullptr) mainWindow->pluginHolder->showAudioSettingsDialog(); };
+        // il pulsante Options della barra del titolo, con un nome italiano per il lettore di schermo
+        for (auto* c : mainWindow->getChildren())
+            if (auto* b = dynamic_cast<juce::TextButton*> (c); b != nullptr && b->getButtonText() == "Options")
+            {
+                b->setTitle ("Opzioni audio e MIDI");
+                b->setHelpText ("Scheda audio, uscita, ingressi MIDI. Anche con Ctrl virgola o con il comando audio.");
+            }
         // profilo del controller scelto dal nome della porta MIDI (solo se non ci sono gia' assegnazioni)
         if (auto* proc = dynamic_cast<RikyProcessor*> (mainWindow->getAudioProcessor()))
         {

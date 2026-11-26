@@ -50,6 +50,7 @@ public:
     void toggleRecord();
     double countInSeconds() const;
     riky::Cues cues;
+    std::function<void()> showAudioSettings;         // solo nell'app autonoma: finestra Audio e MIDI
     bool exportSong (const juce::File& dest, riky::Exporter::Format);   // render offline del brano del sequencer
     void installPiano() { library.startInstall(); }
 

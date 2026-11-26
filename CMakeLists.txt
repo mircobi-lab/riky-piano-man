@@ -141,6 +141,7 @@ set(RIKY_ENGINE_SOURCES Source/Params.cpp Source/PianoEngine.cpp Source/PostChai
 target_sources(RikyPianoMan PRIVATE
     ${RIKY_ENGINE_SOURCES}
     Source/SampleLibrary.cpp
+    Source/ScreenReader.cpp
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp)
 
