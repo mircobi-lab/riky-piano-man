@@ -12,7 +12,9 @@ namespace
 constexpr int margin = 14, lineY = 112, chipY = 124, cellY = 144, cellH = 88, knobW = 60, step = 64;
 constexpr int row2LabelY = 236, row2Y = 252, row2H = 28;
 // seconda fila: pedali, motore, accordatura, articolazioni
-constexpr int lineB = 292, chipB = 304, cellB = 324, comboB = 342, comboH = 26, footerY = 426, keyboardY = 448;
+constexpr int lineB = 292, chipB = 304, cellB = 324, comboB = 342, comboH = 26;
+// terza fila: sequencer
+constexpr int lineC = 424, chipC = 434, seqY = 454, footerY = 494, keyboardY = 516;
 constexpr int lcdY = chipY, lcdH = 16, lcdW = 136;
 constexpr float lcdPitch = 1.32f;
 const juce::Colour lcdGlass (0xff07142e), lcdDotOff (0xff10285a);
@@ -68,7 +70,8 @@ RikyPanel::RikyPanel (RikyProcessor& p)
                  { "PEDAL", {}, { margin, chipB, 212, 110 } },
                  { "ENGINE", {}, { 246, chipB, 250, 110 } },
                  { "TUNING", {}, { 516, chipB, 242, 110 } },
-                 { "ARTICULATION", "KEYSWITCHES", { 778, chipB, 448, 110 } } };
+                 { "ARTICULATION", "KEYSWITCHES", { 778, chipB, 448, 110 } },
+                 { "SEQUENCER", "MIDI PLAYER AND RECORDER", { margin, chipC, baseW - 2 * margin, 50 } } };
 
     // PIANO
     add (Kind::knob, id::tone, "TONE").cell = { margin, cellY, knobW, cellH };
@@ -120,6 +123,25 @@ RikyPanel::RikyPanel (RikyProcessor& p)
         touched = "PANIC"; touchedValue = "ALL NOTES OFF"; touchedMs = juce::Time::getMillisecondCounter();
     };
     for (auto* b : { &installBtn, &libraryBtn, &panicBtn }) addAndMakeVisible (*b);
+
+    // SEQUENCER
+    demoBtn.setTooltip ("Carica e suona la demo \"Riky's Theme\", brano originale scritto per questo pianoforte");
+    demoBtn.onClick = [this] { proc.loadDemo(); proc.sequencer.play(); seqMessage = {}; };
+    loadBtn.setTooltip ("Apri un file MIDI (.mid) da suonare");
+    loadBtn.onClick = [this] { loadMidi(); };
+    saveBtn.setTooltip ("Salva il brano o la registrazione come file MIDI (.mid)");
+    saveBtn.onClick = [this] { saveMidi(); };
+    recBtn.setTooltip ("Registra quello che suoni (tastiera MIDI, tastiera del pannello, SUSTAIN). STOP chiude la ripresa");
+    recBtn.onClick = [this] { proc.sequencer.record(); seqMessage = {}; };
+    playBtn.setTooltip ("Suona il brano dal principio");
+    playBtn.onClick = [this] { proc.sequencer.play(); seqMessage = {}; };
+    stopBtn.onClick = [this] { proc.sequencer.stop(); };
+    exportBtn.setTooltip ("Esporta il brano in MP3 o WAV, fuori tempo reale e alla qualita' massima");
+    exportBtn.onClick = [this] { showExportMenu(); };
+    recBtn.getProperties().set ("led", true);   recBtn.getProperties().set ("ledColour", "ffff3b30");
+    playBtn.getProperties().set ("led", true);  playBtn.getProperties().set ("ledColour", "ff38d26b");
+    exportBtn.getProperties().set ("led", true); exportBtn.getProperties().set ("ledColour", "ffffb020");
+    for (auto* b : { &demoBtn, &loadBtn, &saveBtn, &recBtn, &playBtn, &stopBtn, &exportBtn }) addAndMakeVisible (*b);
     addAndMakeVisible (meter);
 
     keyboard.setColour (juce::MidiKeyboardComponent::whiteNoteColourId, juce::Colour (0xffdcdcd8));
@@ -141,6 +163,13 @@ RikyPanel::RikyPanel (RikyProcessor& p)
     proc.onStatusChanged = [safeThis]
     {
         if (safeThis == nullptr) return;
+        if (safeThis->exportPending && ! safeThis->proc.exporter.busy())
+        {
+            safeThis->exportPending = false;
+            const auto r = safeThis->proc.exporter.result();
+            if (r.ok) { safeThis->lastExport = r.file; safeThis->seqMessage = {}; }
+            else safeThis->seqMessage = "EXPORT: " + r.text;
+        }
         safeThis->instrumentChanged();
         safeThis->updateButtons();
         safeThis->updateLcd();
@@ -298,10 +327,95 @@ void RikyPanel::showDisplayMenu()
 
 void RikyPanel::mouseDown (const juce::MouseEvent& e)
 {
+    if (seqArea.contains (e.getPosition()) && lastExport.existsAsFile()) { lastExport.revealToUser(); return; }
     if (! displayArea.contains (e.getPosition()) || e.mods.isPopupMenu()) return;
     const auto st = proc.engine.status();
     if (st == Status::ready || st == Status::loading) showDisplayMenu();
     else askInstall();
+}
+
+// ------------------------------------------------------------------------------------------------ sequencer
+void RikyPanel::loadMidi()
+{
+    chooser = std::make_unique<juce::FileChooser> ("MIDI", SampleLibrary::baseFolder(), "*.mid;*.midi;*.MID");
+    juce::Component::SafePointer<RikyPanel> safeThis (this);
+    chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles, [safeThis] (const juce::FileChooser& fc)
+    {
+        if (safeThis == nullptr) return;
+        if (const auto f = fc.getResult(); f.existsAsFile())
+            safeThis->seqMessage = safeThis->proc.sequencer.loadMidiFile (f) ? juce::String() : "NOT A READABLE MIDI FILE: " + f.getFileName().toUpperCase();
+        safeThis->repaint();
+    });
+}
+
+void RikyPanel::saveMidi()
+{
+    if (proc.sequencer.isEmpty()) return;
+    const auto folder = SampleLibrary::baseFolder().getChildFile ("Songs");
+    folder.createDirectory();
+    const auto name = juce::File::createLegalFileName (proc.sequencer.name().isNotEmpty() ? proc.sequencer.name() : juce::String ("song"));
+    chooser = std::make_unique<juce::FileChooser> ("MIDI", folder.getNonexistentChildFile (name, ".mid"), "*.mid");
+    juce::Component::SafePointer<RikyPanel> safeThis (this);
+    chooser->launchAsync (juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles | juce::FileBrowserComponent::warnAboutOverwriting,
+                          [safeThis] (const juce::FileChooser& fc)
+    {
+        if (safeThis == nullptr) return;
+        auto f = fc.getResult();
+        if (f == juce::File()) return;
+        if (! f.hasFileExtension ("mid;midi")) f = f.withFileExtension ("mid");
+        safeThis->seqMessage = safeThis->proc.sequencer.saveMidiFile (f) ? "SAVED " + f.getFileName().toUpperCase() : "CANNOT SAVE " + f.getFileName().toUpperCase();
+        safeThis->repaint();
+    });
+}
+
+void RikyPanel::showExportMenu()
+{
+    if (proc.exporter.busy()) { proc.exporter.cancel(); return; }
+    using F = Exporter::Format;
+    juce::PopupMenu m;
+    m.addSectionHeader ("EXPORT THE SONG (OFFLINE, MAX QUALITY, 44.1 KHZ)");
+    const bool can = ! proc.sequencer.isEmpty() && proc.engine.status() == Status::ready;
+    m.addItem (1, "MP3  320 KBPS (CBR)", can);
+    m.addItem (2, "MP3  V0 (VBR, ABOUT 245 KBPS)", can);
+    m.addItem (3, "WAV  24 BIT", can);
+    juce::Component::SafePointer<RikyPanel> safeThis (this);
+    m.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&exportBtn), [safeThis] (int r)
+    {
+        if (safeThis == nullptr || r == 0) return;
+        const auto fmt = r == 1 ? F::mp3_320 : r == 2 ? F::mp3_v0 : F::wav24;
+        const auto folder = SampleLibrary::baseFolder().getChildFile ("Exports");
+        folder.createDirectory();
+        const auto name = juce::File::createLegalFileName (safeThis->proc.sequencer.name().isNotEmpty() ? safeThis->proc.sequencer.name() : juce::String ("Riky Piano Man"));
+        safeThis->chooser = std::make_unique<juce::FileChooser> ("EXPORT", folder.getNonexistentChildFile (name, Exporter::extension (fmt)),
+                                                                fmt == F::wav24 ? "*.wav" : "*.mp3");
+        safeThis->chooser->launchAsync (juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles | juce::FileBrowserComponent::warnAboutOverwriting,
+                                        [safeThis, fmt] (const juce::FileChooser& fc)
+        {
+            if (safeThis == nullptr) return;
+            auto f = fc.getResult();
+            if (f == juce::File()) return;
+            f = f.withFileExtension (Exporter::extension (fmt));
+            safeThis->lastExport = juce::File();
+            safeThis->exportPending = safeThis->proc.exportSong (f, fmt);
+            safeThis->seqMessage = safeThis->exportPending ? juce::String() : juce::String ("EXPORT NOT STARTED");
+            safeThis->repaint();
+        });
+    });
+}
+
+void RikyPanel::updateTransport()
+{
+    using S = Sequencer::State;
+    const auto st = proc.sequencer.state();
+    const bool exporting = proc.exporter.busy();
+    recBtn.setToggleState (st == S::recording && (juce::Time::getMillisecondCounter() / 400) % 2 == 0, juce::dontSendNotification);
+    playBtn.setToggleState (st == S::playing, juce::dontSendNotification);
+    exportBtn.setToggleState (exporting, juce::dontSendNotification);
+    exportBtn.setButtonText (exporting ? "CANCEL EXPORT" : "EXPORT MP3 / WAV");
+    const bool empty = proc.sequencer.isEmpty();
+    playBtn.setEnabled (! empty);
+    saveBtn.setEnabled (! empty && st != S::recording);
+    exportBtn.setEnabled (exporting || (! empty && st == S::stopped));
 }
 
 void RikyPanel::updateButtons()
@@ -497,6 +611,14 @@ void RikyPanel::resized()
         }
     }
     meter.setBounds (1070, 266, 144, 8);
+    demoBtn.setBounds (margin, seqY, 84, 28);
+    loadBtn.setBounds (margin + 92, seqY, 76, 28);
+    saveBtn.setBounds (margin + 174, seqY, 76, 28);
+    recBtn.setBounds (282, seqY, 84, 28);
+    playBtn.setBounds (372, seqY, 84, 28);
+    stopBtn.setBounds (462, seqY, 76, 28);
+    seqArea = { 556, seqY - 2, 470, 32 };
+    exportBtn.setBounds (1040, seqY, 186, 28);
     keyboard.setBounds (margin, keyboardY, baseW - 2 * margin, baseH - keyboardY - 12);
     midiOverlay.setBounds (getLocalBounds());
 }
@@ -635,6 +757,62 @@ void RikyPanel::paintTemperament (juce::Graphics& g)
     }
 }
 
+void RikyPanel::paintSequencer (juce::Graphics& g)
+{
+    using S = Sequencer::State;
+    const auto a = seqArea.toFloat();
+    ui::paintRecess (g, a);
+    const auto in = a.reduced (10.f, 4.f);
+    auto mmss = [] (double t)
+    {
+        const int cs = juce::roundToInt (juce::jmax (0.0, t) * 10.0);
+        return juce::String (cs / 600).paddedLeft ('0', 2) + ":" + juce::String ((cs / 10) % 60).paddedLeft ('0', 2) + "." + juce::String (cs % 10);
+    };
+    const auto st = proc.sequencer.state();
+    const double len = proc.sequencer.length();
+    const double posS = st == S::stopped ? 0.0 : proc.sequencer.position();
+
+    juce::String left, right;
+    float fraction = 0.f;
+    juce::Colour bar = C::ledGreen;
+    if (proc.exporter.busy())
+    {
+        left = "EXPORTING  " + proc.sequencer.name().toUpperCase();
+        right = juce::String (juce::roundToInt (proc.exporter.progress() * 100.f)) + "%";
+        fraction = proc.exporter.progress();
+        bar = C::ledAmber;
+    }
+    else if (st == S::recording)
+    {
+        left = "RECORDING  -  PLAY, THEN STOP";
+        right = mmss (posS);
+        fraction = (float) std::fmod (posS, 10.0) / 10.f;
+        bar = C::ledRed;
+    }
+    else if (seqMessage.isNotEmpty())
+        left = seqMessage;
+    else if (const auto r = proc.exporter.result(); r.text.isNotEmpty() && st == S::stopped && r.file == lastExport && lastExport != juce::File())
+        left = r.text + "  -  CLICK TO SHOW";
+    else if (proc.sequencer.isEmpty())
+        left = "NO SONG  -  PRESS DEMO, LOAD A MIDI FILE OR REC";
+    else
+    {
+        left = proc.sequencer.name().toUpperCase() + "   " + juce::String (proc.sequencer.numNotes()) + " NOTES";
+        right = mmss (posS) + " / " + mmss (len);
+        fraction = len > 0 ? (float) (posS / len) : 0.f;
+    }
+    g.setFont (ui::Fonts::label (12.f));
+    g.setColour (C::print);
+    g.drawText (left, in.withHeight (14.f).withTrimmedRight (130.f), juce::Justification::centredLeft, true);
+    g.setFont (ui::Fonts::display (15.f));
+    g.drawText (right, in.withHeight (16.f).withLeft (in.getRight() - 128.f), juce::Justification::centredRight, false);
+    const auto track = juce::Rectangle<float> (in.getX(), in.getBottom() - 5.f, in.getWidth(), 4.f);
+    g.setColour (C::ledOff);
+    g.fillRoundedRectangle (track, 1.5f);
+    g.setColour (bar);
+    g.fillRoundedRectangle (track.withWidth (track.getWidth() * juce::jlimit (0.f, 1.f, fraction)), 1.5f);
+}
+
 void RikyPanel::paint (juce::Graphics& g)
 {
     ui::paintChassis (g, getLocalBounds());
@@ -645,6 +823,8 @@ void RikyPanel::paint (juce::Graphics& g)
     paintDisplay (g);
     ui::paintEngravedLine (g, { (float) margin, (float) lineY }, { (float) baseW - margin, (float) lineY });
     ui::paintEngravedLine (g, { (float) margin, (float) lineB }, { (float) baseW - margin, (float) lineB });
+    ui::paintEngravedLine (g, { (float) margin, (float) lineC }, { (float) baseW - margin, (float) lineC });
+    paintSequencer (g);
 
     for (auto& s : sections)
     {
@@ -733,6 +913,8 @@ void RikyPanel::updateLcd()
     else if (proc.engine.status() == Status::loading) t = "LOADING";
     else if (proc.engine.status() == Status::error) t = "ERROR - " + proc.engine.errorText();
     else if (proc.engine.status() == Status::empty) t = "INSTALL PIANO";
+    else if (proc.sequencer.state() == Sequencer::State::recording) t = "REC " + juce::String ((int) proc.sequencer.position() / 60) + ":" + juce::String ((int) proc.sequencer.position() % 60).paddedLeft ('0', 2);
+    else if (proc.exporter.busy()) t = "EXPORT " + juce::String (juce::roundToInt (proc.exporter.progress() * 100.f)) + "%";
     else t = "RIKY PIANO MAN";
     if (t != lcdText) { lcdText = t; lcdOffset = 0; lcdTicks = 0; repaint (lcdArea); }
 }
@@ -800,6 +982,8 @@ void RikyPanel::timerCallback()
             b->setToggleState ((int) b->getProperties()["switchKey"] == sw, juce::dontSendNotification);
     }
     repaint (246, comboB + 54, 252, 12);   // LED delle voci
+    updateTransport();
+    repaint (seqArea);
     repaint (temperArea);
     if (panicFlash > 0) --panicFlash;
     panicBtn.setToggleState (panicFlash > 0 && (panicFlash / 3) % 2 == 0, juce::dontSendNotification);

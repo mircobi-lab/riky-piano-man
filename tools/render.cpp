@@ -1,6 +1,9 @@
 // Prova del motore senza interfaccia: carica il Maestro Concert Grand con sfizz, suona e controlla il risultato.
-// uso: riky_render "Maestro Concert Grand.sfz" uscita.wav [strumento-con-keyswitch.sfz]
+// uso: riky_render "Maestro Concert Grand.sfz" uscita.wav [strumento-con-keyswitch.sfz] [cartella-export]
 #include "PianoEngine.h"
+#include "Sequencer.h"
+#include "Exporter.h"
+#include <BinaryData.h>
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <cmath>
 #include <cstdio>
@@ -280,6 +283,7 @@ int main (int argc, char** argv)
         auto a = k.play (1.0, { { .0, on (24, 100) }, { .05, off (24) }, { .1, on (57, 100) }, { .9, off (57) } });
         check (k.engine.currentSwitch() == 24, "keyswitch C1 attivo");
         const double f1 = peakFreq (a, .3, .4, 200, 600);
+        std::printf ("      livello articolazione 1: %.1f dBFS\n", juce::Decibels::gainToDecibels (rms (a, .3, .7)));
         auto b = k.play (1.0, { { .0, on (26, 100) }, { .05, off (26) }, { .1, on (57, 100) }, { .9, off (57) } });
         check (k.engine.currentSwitch() == 26, "keyswitch D1 attivo");
         const double f2 = peakFreq (b, .3, .4, 200, 600);
@@ -288,6 +292,113 @@ int main (int argc, char** argv)
         if (lvl >= 0) k.s.slots[(size_t) lvl] = 0.f;
         auto c = k.play (.6, { { .0, on (57, 100) }, { .5, off (57) } });
         check (rms (c, .1, .4) < 1e-5f, "CC 20 a zero spegne (amplitude_oncc20)");
+    }
+
+    // 13. sequencer: la demo incorporata suona nel motore, STOP spegne le note
+    std::vector<SeqEvent> demo;
+    {
+        juce::MemoryInputStream in (BinaryData::demorikytheme_mid, (size_t) BinaryData::demorikytheme_midSize, false);
+        const bool read = Sequencer::readMidi (in, demo);
+        check (read && demo.size() > 600, "demo incorporata letta (" + juce::String ((int) demo.size()) + " eventi, "
+                                          + juce::String (demo.empty() ? 0.0 : demo.back().time, 1) + " s)");
+        Sequencer seq;
+        seq.setEvents (demo, "DEMO");
+        seq.play();
+        juce::AudioBuffer<float> b (2, block);
+        float during = 0.f;
+        for (int i = 0; i < (int) (8.0 * sr / block); ++i)
+        {
+            juce::MidiBuffer m;
+            seq.processPlayback (m, block, sr);
+            b.setSize (2, block, false, false, true);
+            r.engine.render (b, m, r.s);
+            if (i * block > 4 * sr) during = juce::jmax (during, b.getMagnitude (0, block));
+        }
+        check (seq.state() == Sequencer::State::playing && std::abs (seq.position() - 8.0) < .02 && during > .01f, "PLAY della demo: suona e il tempo avanza");
+        seq.stop();
+        float after = 0.f;
+        for (int i = 0; i < (int) (5.0 * sr / block); ++i)
+        {
+            juce::MidiBuffer m;
+            seq.processPlayback (m, block, sr);
+            b.setSize (2, block, false, false, true);
+            r.engine.render (b, m, r.s);
+            if (i * block > 4 * sr) after = juce::jmax (after, b.getMagnitude (0, block));
+        }
+        check (seq.state() == Sequencer::State::stopped && after < .002f, "STOP: note e pedale rilasciati (" + juce::String (juce::Decibels::gainToDecibels (after), 1) + " dBFS dopo 4 s)");
+    }
+    // 14. registrazione: note e pulsante SUSTAIN registrati, silenzio iniziale tolto, nota tenuta chiusa, file MIDI salvato e riletto
+    {
+        Sequencer seq;
+        seq.record();
+        juce::MidiBuffer m;
+        seq.processPlayback (m, block, sr);   // il comando REC parte qui
+        const int total = (int) (3.0 * sr / block);
+        for (int i = 0; i < total; ++i)
+        {
+            juce::MidiBuffer in;
+            const double t = (double) i * block / sr;
+            if (i == (int) (1.0 * sr / block)) in.addEvent (on (60, 90), 17);
+            if (i == (int) (1.5 * sr / block)) in.addEvent (off (60), 3);
+            if (i == (int) (2.0 * sr / block)) in.addEvent (on (64, 70), 0);   // resta giù fino a STOP
+            seq.processRecording (in, block, sr, t > 1.2 && t < 1.8);
+            if (i % 20 == 0) seq.update();
+        }
+        seq.stop();
+        juce::MidiBuffer m2;
+        seq.processPlayback (m2, block, sr);
+        seq.update();
+        const auto& ev = seq.events();
+        int ons = 0, offs = 0, peds = 0; double firstOn = -1;
+        for (auto& e : ev)
+        {
+            if (e.msg.isNoteOn()) { ++ons; if (firstOn < 0) firstOn = e.time; }
+            else if (e.msg.isNoteOff()) ++offs;
+            else if (e.msg.isController() && e.msg.getControllerNumber() == 64) ++peds;
+        }
+        check (ons == 2 && offs == 2 && peds == 2, "ripresa: 2 note, 2 rilasci (uno aggiunto alla fine), pedale giu' e su");
+        check (std::abs (firstOn - .2) < .002, "silenzio iniziale tolto: prima nota a " + juce::String (firstOn, 3) + " s");
+        const auto mid = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("riky-take.mid");
+        Sequencer back;
+        check (seq.saveMidiFile (mid) && back.loadMidiFile (mid) && back.events().size() == ev.size()
+               && std::abs (back.events().front().time - ev.front().time) < .001, "salvataggio e rilettura del file MIDI");
+        mid.deleteFile();
+    }
+    // 15. export: MP3 320 e WAV 24 bit della demo, fuori tempo reale
+    if (argc > 4)
+    {
+        const juce::File outDir = juce::File::getCurrentWorkingDirectory().getChildFile (argv[4]);
+        outDir.createDirectory();
+        for (auto fmt : { Exporter::Format::mp3_320, Exporter::Format::wav24 })
+        {
+            Exporter::Job j;
+            j.events = demo;
+            j.sfz = r.engine.currentFile();
+            j.dest = outDir.getChildFile (juce::String ("riky-theme") + Exporter::extension (fmt));
+            j.title = "Riky's Theme";
+            j.engine = r.s;
+            j.engine.pedalButton = false;
+            j.format = fmt;
+            const auto t0 = juce::Time::getMillisecondCounterHiRes();
+            const auto res = Exporter::renderNow (j, [] (float) { return true; });
+            const double secs = (juce::Time::getMillisecondCounterHiRes() - t0) / 1000.0;
+            const auto size = res.file.getSize();
+            check (res.ok && res.seconds > demo.back().time && res.seconds < demo.back().time + 21,
+                   "export " + j.dest.getFileName() + ": " + juce::String (res.seconds, 1) + " s di audio in " + juce::String (secs, 1) + " s, picco "
+                   + juce::String (res.peakDb, 1) + " dBFS, " + juce::String (size / 1024) + " KB  " + res.text);
+            check (res.peakDb < -.1f && res.peakDb > -30.f, "livello dell'export sensato, senza clip");
+            if (fmt == Exporter::Format::mp3_320)
+            {
+                juce::MemoryBlock mb;
+                res.file.loadFileAsData (mb);
+                const auto* d = static_cast<const char*> (mb.getData());
+                auto findBytes = [&] (const char* tag) { for (size_t i = 0; i + 4 < juce::jmin<size_t> (mb.getSize(), 8192); ++i) if (std::memcmp (d + i, tag, 4) == 0) return true; return false; };
+                const double expected = 320000.0 / 8.0 * res.seconds;
+                check (mb.getSize() > 3 && d[0] == 'I' && d[1] == 'D' && d[2] == '3', "MP3 con tag ID3v2");
+                check (findBytes ("Info") || findBytes ("Xing"), "MP3 con intestazione LAME (durata esatta nei lettori)");
+                check (std::abs ((double) mb.getSize() - expected) / expected < .03, "dimensione coerente con 320 kbps");
+            }
+        }
     }
 
     check (finite (r.out), "nessun NaN o infinito");

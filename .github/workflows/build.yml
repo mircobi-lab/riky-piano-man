@@ -32,13 +32,21 @@ jobs:
         run: |
           git clone -q https://github.com/sfzinstruments/MatsHelgesson.MaestroConcertGrandPiano maestro
           git -C maestro checkout -q 717078b450eccc4a7733755f4b5973426ebc23e9
-      - name: Prova (intonazione, 432 Hz, temperamenti, velocity, pedali, rilasci, 88 tasti, PANIC, SFZ CONTROLS, keyswitch)
-        run: ./build/riky_render_artefacts/Release/riky_render "maestro/Maestro Concert Grand.sfz" prova.wav tools/test-instrument/keyswitch-test.sfz
+      - name: Prova (intonazione, temperamenti, pedali, rilasci, 88 tasti, PANIC, SFZ CONTROLS, keyswitch, sequencer, export MP3 e WAV)
+        run: ./build/riky_render_artefacts/Release/riky_render "maestro/Maestro Concert Grand.sfz" prova.wav tools/test-instrument/keyswitch-test.sfz export
+      - name: Controllo dell'MP3 della demo con ffprobe
+        run: |
+          ffprobe -v error -show_entries format=duration,bit_rate:format_tags=title -show_entries stream=codec_name,sample_rate,channels -of default=nw=1 export/riky-theme.mp3
+          cp export/riky-theme.mp3 RikyPianoMan-demo-Rikys-Theme.mp3
       - uses: actions/upload-artifact@v4
         with:
           name: prova-audio
           path: prova.wav
           retention-days: 7
+      - uses: actions/upload-artifact@v4
+        with:
+          name: demo
+          path: RikyPianoMan-demo-Rikys-Theme.mp3
 
   mac:
     name: macOS (Intel + Apple Silicon)
@@ -126,6 +134,10 @@ jobs:
         with:
           name: windows
           path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: demo
+          path: dist
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
@@ -149,4 +161,8 @@ jobs:
             **Il suono** (una volta sola): al primo avvio premi INSTALL. Il plugin scarica circa 256 MB di campioni dal repository ufficiale
             https://github.com/sfzinstruments/MatsHelgesson.MaestroConcertGrandPiano e li mette in Musica/Riky Piano Man.
             Campioni © Mats Helgesson 2003, conversione SFZ di kinwie: set gratuito, non si può vendere.
-          files: dist/*.zip
+
+            **Demo**: RikyPianoMan-demo-Rikys-Theme.mp3 è la demo "Riky's Theme" (brano originale) esportata da GitHub con il plugin, MP3 320 kbps.
+          files: |
+            dist/*.zip
+            dist/*.mp3

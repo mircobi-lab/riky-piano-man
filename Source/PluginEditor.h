@@ -32,7 +32,7 @@ public:
     bool isInterestedInFileDrag (const juce::StringArray&) override;
     void filesDropped (const juce::StringArray&, int, int) override;
 
-    static constexpr int baseW = 1240, baseH = 600;
+    static constexpr int baseW = 1240, baseH = 660;
     static void paintRikyLogo (juce::Graphics&, juce::Rectangle<float> area);   // marchio RIKY PIANO MAN
 
 private:
@@ -58,6 +58,11 @@ private:
     std::vector<Section> sections;
     juce::TextButton installBtn { "INSTALL" }, libraryBtn { "LIBRARY" }, panicBtn { "PANIC" };
     juce::OwnedArray<juce::TextButton> switchBtns;
+    juce::TextButton demoBtn { "DEMO" }, loadBtn { "LOAD" }, saveBtn { "SAVE" }, recBtn { "REC" }, playBtn { "PLAY" }, stopBtn { "STOP" }, exportBtn { "EXPORT MP3 / WAV" };
+    juce::Rectangle<int> seqArea;
+    juce::String seqMessage;
+    juce::File lastExport;
+    bool exportPending = false;
     mbstudio::ui::LedMeter meter { 14 };
     RikyKeyboard keyboard;
     mbstudio::midi::MidiControls midiButtons;
@@ -87,6 +92,11 @@ private:
     void paintLcd (juce::Graphics&);
     void paintDisplay (juce::Graphics&);
     void paintTemperament (juce::Graphics&);
+    void paintSequencer (juce::Graphics&);
+    void loadMidi();
+    void saveMidi();
+    void showExportMenu();
+    void updateTransport();
     void timerCallback() override;
     void fileDragEnter (const juce::StringArray&, int, int) override { dragOver = true; repaint(); }
     void fileDragExit (const juce::StringArray&) override { dragOver = false; repaint(); }

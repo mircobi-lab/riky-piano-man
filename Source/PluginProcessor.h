@@ -3,6 +3,9 @@
 #include "Params.h"
 #include "PianoEngine.h"
 #include "SampleLibrary.h"
+#include "Sequencer.h"
+#include "Exporter.h"
+#include "PostChain.h"
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <juce_dsp/juce_dsp.h>
 
@@ -39,6 +42,8 @@ public:
     // ---- thread dei messaggi
     void loadPiano (const juce::File& sfz);          // un file .sfz: il Maestro o qualsiasi altro strumento SFZ
     void resetSfzControls();                         // SFZ CONTROLS ai valori scritti nel file
+    void loadDemo();                                 // "Riky's Theme" nel sequencer
+    bool exportSong (const juce::File& dest, riky::Exporter::Format);   // render offline del brano del sequencer
     void installPiano() { library.startInstall(); }
 
     float outputLevel() const noexcept { return level.load(); }
@@ -49,10 +54,10 @@ public:
     mbstudio::midi::MidiMapper midiMap;
     riky::PianoEngine engine;
     riky::SampleLibrary library;
+    riky::Sequencer sequencer;
+    riky::Exporter exporter;
     std::function<void()> onStatusChanged;           // per il pannello (thread dei messaggi)
 
-    // guadagno fisso: il file SFZ suona basso (CC 7 a 100, picchi di circa -11 dBFS a velocity 127)
-    static constexpr float makeupDb = 6.f;
 
 private:
     std::atomic<float>* tone = nullptr, *tune = nullptr, *transpose = nullptr, *a4ref = nullptr, *velCurve = nullptr,
@@ -60,14 +65,8 @@ private:
                        *pedal = nullptr, *soft = nullptr, *softAmt = nullptr,
                        *roomOn = nullptr, *roomSize = nullptr, *roomDamp = nullptr, *roomMix = nullptr, *width = nullptr, *volume = nullptr;
 
-    using Filter = juce::dsp::IIR::Filter<float>;
-    Filter lowShelf[2], highShelf[2];
-    float appliedTone = 1.0e9f;
+    riky::PostChain post;
     double sr = 44100.0;
-    juce::Reverb reverb;
-    bool reverbCleared = false;
-    juce::SmoothedValue<float> gain, wet, widthSm;
-    juce::AudioBuffer<float> dry;
     std::atomic<float> level { 0.f };
     std::array<std::atomic<float>*, riky::numSlots> slots {};
     juce::String slotsFile;      // file a cui si riferiscono i valori degli SFZ CONTROLS (altrimenti si usano i valori del file)
@@ -75,8 +74,9 @@ private:
     void timerCallback() override;
     void engineChanged();
 
-    void updateTone (float t);
     void notify();
+    riky::EngineSettings engineSettings() const;
+    riky::PostSettings postSettings() const;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (RikyProcessor)
 };

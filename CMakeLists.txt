@@ -70,6 +70,34 @@ else()
     FetchContent_MakeAvailable(sfizz)
 endif()
 
+# ---- LAME 3.100 (LGPL) per l'export MP3: sorgenti ufficiali verificati con SHA-256, compilati senza ./configure
+set(LAME_DIR "" CACHE PATH "Percorso di una copia locale dei sorgenti di LAME 3.100")
+if(LAME_DIR AND EXISTS "${LAME_DIR}/include/lame.h")
+    set(lame_SOURCE_DIR "${LAME_DIR}")
+else()
+    FetchContent_Declare(lame
+        URL https://downloads.sourceforge.net/project/lame/lame/3.100/lame-3.100.tar.gz
+            http://archive.ubuntu.com/ubuntu/pool/main/l/lame/lame_3.100.orig.tar.gz
+        URL_HASH SHA256=ddfe36cab873794038ae2c1210557ad34857a4b6bdc515785d1da9e175b1da1e
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+    FetchContent_MakeAvailable(lame)
+endif()
+set(_lame_src bitstream encoder fft gain_analysis id3tag lame newmdct presets psymodel quantize quantize_pvt
+              reservoir set_get tables takehiro util vbrquantize VbrTag version)
+list(TRANSFORM _lame_src PREPEND "${lame_SOURCE_DIR}/libmp3lame/")
+list(TRANSFORM _lame_src APPEND ".c")
+add_library(rikylame STATIC ${_lame_src})
+target_include_directories(rikylame
+    PUBLIC "${lame_SOURCE_DIR}/include"
+    PRIVATE "${lame_SOURCE_DIR}/libmp3lame" "${CMAKE_CURRENT_SOURCE_DIR}/third_party/lame-config")
+target_compile_definitions(rikylame PRIVATE HAVE_CONFIG_H _CRT_SECURE_NO_WARNINGS)
+if(NOT MSVC)
+    target_compile_options(rikylame PRIVATE -w)
+endif()
+
+# ---- demo incorporata
+juce_add_binary_data(RikyData SOURCES Resources/demo-riky-theme.mid)
+
 # ---- plugin
 set(RIKY_FORMATS VST3 Standalone)
 if(APPLE)
@@ -101,7 +129,7 @@ juce_add_plugin(RikyPianoMan
 include(MBStudioUI/MBStudioUI.cmake)
 mbstudio_ui_add(RikyPianoMan)
 
-set(RIKY_ENGINE_SOURCES Source/Params.cpp Source/PianoEngine.cpp)
+set(RIKY_ENGINE_SOURCES Source/Params.cpp Source/PianoEngine.cpp Source/PostChain.cpp Source/Sequencer.cpp Source/Exporter.cpp)
 target_sources(RikyPianoMan PRIVATE
     ${RIKY_ENGINE_SOURCES}
     Source/SampleLibrary.cpp
@@ -123,6 +151,8 @@ target_compile_definitions(RikyPianoMan PUBLIC
 target_link_libraries(RikyPianoMan
     PRIVATE
         sfizz::sfizz
+        rikylame
+        RikyData
         juce::juce_audio_utils
         juce::juce_dsp
     PUBLIC
@@ -137,6 +167,6 @@ if(RIKY_BUILD_TOOLS)
     target_sources(riky_render PRIVATE tools/render.cpp ${RIKY_ENGINE_SOURCES})
     target_include_directories(riky_render PRIVATE Source)
     target_compile_definitions(riky_render PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0)
-    target_link_libraries(riky_render PRIVATE sfizz::sfizz juce::juce_audio_processors juce::juce_audio_basics juce::juce_audio_formats juce::juce_events juce::juce_gui_basics
+    target_link_libraries(riky_render PRIVATE sfizz::sfizz rikylame RikyData juce::juce_dsp juce::juce_audio_processors juce::juce_audio_basics juce::juce_audio_formats juce::juce_events juce::juce_gui_basics
                                       PUBLIC juce::juce_recommended_config_flags)
 endif()

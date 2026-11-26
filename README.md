@@ -43,6 +43,19 @@ I file restano identici agli originali, compreso `mcgreadme.txt` con le note del
 
 La tastiera si adatta allo strumento: i tasti che non suonano sono grigi, i keyswitch ambra. Il display mostra regioni, campioni, voci, ultima nota (con il nome del tasto se il file lo dichiara) e articolazione.
 
+## Sequencer: demo, registrazione, export
+
+La fila SEQUENCER è un lettore e registratore MIDI a una traccia.
+
+- **DEMO** carica e suona "Riky's Theme", un brano originale scritto per questo pianoforte (Mib maggiore, 72 BPM, circa un minuto e mezzo, con pedale e dinamiche). Lo genera `tools/make_demo.py`, il file è `Resources/demo-riky-theme.mid` ed è incorporato nel plugin.
+- **LOAD** apre un file MIDI (.mid); tutte le tracce vengono unite e suonate sul pianoforte.
+- **REC** registra quello che si suona: tastiera MIDI, tastiera del pannello, pulsanti dei keyswitch e pulsante SUSTAIN (come CC 64). **STOP** chiude la ripresa: il silenzio iniziale viene tolto e le note ancora tenute vengono chiuse. Una nuova ripresa sostituisce quella in memoria.
+- **PLAY** e **STOP** suonano e fermano il brano; la tastiera del pannello mostra le note.
+- **SAVE** salva il brano come file MIDI in Musica/Riky Piano Man/Songs.
+- **EXPORT MP3 / WAV** fa il render fuori tempo reale, alla qualità massima e a 44,1 kHz (la frequenza dei campioni del Maestro, quindi senza ricampionamento), con la stessa catena del pannello (tono, larghezza, stanza, volume). Formati: MP3 320 kbps, MP3 V0, WAV 24 bit. I file vanno in Musica/Riky Piano Man/Exports; un clic sul riquadro del brano apre la cartella. Alla fine il riquadro mostra il picco in dBFS e avvisa se c'è clipping.
+
+Il brano resta salvato nel progetto della DAW o nelle impostazioni dell'app. L'MP3 è codificato con LAME 3.100 (LGPL), compilato dai sorgenti ufficiali controllati con l'impronta SHA-256; ha tag ID3 e l'intestazione LAME, così i lettori conoscono la durata esatta.
+
 ## Altri strumenti SFZ
 
 Riky Piano Man suona qualsiasi file SFZ, non solo il Maestro. LIBRARY apre gli strumenti recenti, tutti i `.sfz` nella cartella Musica/Riky Piano Man (basta copiarci dentro le cartelle degli strumenti) e la scelta di un altro file. Si può anche trascinare un `.sfz` o la sua cartella sul pannello. Il motore sfizz gestisce le intestazioni e gli opcode SFZ v1, v2 e ARIA che usano gli strumenti pubblicati: `#define`, `#include`, keyswitch, round robin, regioni di rilascio, CC e curve, filtri, inviluppi, effetti, accordature Scala. Tempo, metro e posizione dell'host arrivano allo strumento per gli SFZ che li usano.
@@ -61,6 +74,8 @@ Un clic sul display apre il menu: cartella dei campioni, readme dell'autore, ric
 
 - Codice di Riky Piano Man: AGPL v3 (vedi `LICENSE.md`), derivato da MBStudio91 Campione.
 - sfizz: licenza BSD a 2 clausole, © sfizz contributors.
+- LAME 3.100: licenza LGPL 2, © The LAME Project (codifica MP3).
+- Demo "Riky's Theme": brano originale scritto per Riky Piano Man, stessa licenza del progetto.
 - JUCE: licenza AGPL v3.
 - Font Bebas Neue e Antonio: SIL Open Font License (cartella `MBStudioUI/fonts`).
 - Campioni: © Mats Helgesson 2003, tutti i diritti riservati. Il set è gratuito e **non si può vendere**, né modificare e ridistribuire senza il permesso scritto dell'autore. Per questo il plugin non li contiene e li scarica invariati dalla fonte ufficiale. Strumento SFZ derivato da [sfzinstruments/MatsHelgesson.MaestroConcertGrandPiano](https://github.com/sfzinstruments/MatsHelgesson.MaestroConcertGrandPiano), conversione di kinwie pubblicata con il permesso dell'autore.
@@ -72,12 +87,12 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
 ```
 
-JUCE 9.0.5 e sfizz 1.2.3 vengono scaricati da CMake. Sul Mac si compila un'architettura per volta (`-DCMAKE_OSX_ARCHITECTURES=x86_64` oppure `arm64`); il workflow le unisce con `lipo`. Per la prova del motore senza interfaccia:
+JUCE 9.0.5, sfizz 1.2.3 e LAME 3.100 vengono scaricati da CMake. Sul Mac si compila un'architettura per volta (`-DCMAKE_OSX_ARCHITECTURES=x86_64` oppure `arm64`); il workflow le unisce con `lipo`. Per la prova del motore senza interfaccia:
 
 ```
 cmake -S . -B build -DRIKY_BUILD_TOOLS=ON
 cmake --build build --target riky_render
-./build/riky_render_artefacts/Release/riky_render "percorso/Maestro Concert Grand.sfz" prova.wav tools/test-instrument/keyswitch-test.sfz
+./build/riky_render_artefacts/Release/riky_render "percorso/Maestro Concert Grand.sfz" prova.wav tools/test-instrument/keyswitch-test.sfz export
 ```
 
-La prova controlla il caricamento delle 804 regioni, i tasti e i controlli letti dal file con i loro valori iniziali, l'intonazione rispetto alla registrazione, 432 Hz, TUNE e trasposizione, gli strati di velocity, il sustain da CC 64 e dal pannello, il rumore di rilascio dei tasti, tutti gli 88 tasti, PANIC, l'assenza di note bloccate, i temperamenti con la tonica, gli SFZ CONTROLS, i tre livelli di qualità e, con lo strumento di prova in `tools/test-instrument`, keyswitch, nomi delle articolazioni e trasposizione che non sposta i keyswitch. Gira anche su GitHub a ogni commit.
+La prova controlla il caricamento delle 804 regioni, i tasti e i controlli letti dal file con i loro valori iniziali, l'intonazione rispetto alla registrazione, 432 Hz, TUNE e trasposizione, gli strati di velocity, il sustain da CC 64 e dal pannello, il rumore di rilascio dei tasti, tutti gli 88 tasti, PANIC, l'assenza di note bloccate, i temperamenti con la tonica, gli SFZ CONTROLS, i tre livelli di qualità e, con lo strumento di prova in `tools/test-instrument`, keyswitch, nomi delle articolazioni e trasposizione che non sposta i keyswitch. Poi il sequencer (la demo suona, STOP rilascia note e pedale, una ripresa simulata viene chiusa e salvata in MIDI) e l'export della demo in MP3 320 e WAV 24 bit, con controllo di livello, tag e dimensione. Gira anche su GitHub a ogni commit, e l'MP3 della demo finisce nella pagina Releases.
