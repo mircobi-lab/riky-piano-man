@@ -64,6 +64,7 @@ set(SFIZZ_USE_SNDFILE OFF CACHE BOOL "" FORCE)
 set(ENABLE_LTO OFF CACHE BOOL "" FORCE)
 set(SFIZZ_DIR "" CACHE PATH "Percorso di una copia locale di sfizz (con i sottomoduli)")
 if(SFIZZ_DIR AND EXISTS "${SFIZZ_DIR}/CMakeLists.txt")
+    execute_process(COMMAND ${CMAKE_COMMAND} -DSFIZZ_SOURCE=${SFIZZ_DIR} -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patch-sfizz.cmake COMMAND_ERROR_IS_FATAL ANY)
     add_subdirectory("${SFIZZ_DIR}" sfizz EXCLUDE_FROM_ALL)
 else()
     FetchContent_Declare(sfizz
@@ -71,6 +72,8 @@ else()
         GIT_TAG 1.2.3
         GIT_SHALLOW TRUE
         GIT_SUBMODULES_RECURSE TRUE
+        PATCH_COMMAND ${CMAKE_COMMAND} -DSFIZZ_SOURCE=<SOURCE_DIR> -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patch-sfizz.cmake
+        UPDATE_DISCONNECTED TRUE
         EXCLUDE_FROM_ALL)
     FetchContent_MakeAvailable(sfizz)
 endif()
@@ -101,7 +104,7 @@ if(NOT MSVC)
 endif()
 
 # ---- demo incorporata
-juce_add_binary_data(RikyData SOURCES Resources/demo-riky-theme.mid)
+juce_add_binary_data(RikyData SOURCES Resources/demo-riky-theme.mid docs/GUIDA-RIKY.txt)
 
 # ---- plugin
 set(RIKY_FORMATS VST3 Standalone)
@@ -134,7 +137,7 @@ juce_add_plugin(RikyPianoMan
 include(MBStudioUI/MBStudioUI.cmake)
 mbstudio_ui_add(RikyPianoMan)
 
-set(RIKY_ENGINE_SOURCES Source/Params.cpp Source/PianoEngine.cpp Source/PostChain.cpp Source/Sequencer.cpp Source/Exporter.cpp)
+set(RIKY_ENGINE_SOURCES Source/Params.cpp Source/PianoEngine.cpp Source/PostChain.cpp Source/Sequencer.cpp Source/Exporter.cpp Source/Cues.cpp)
 target_sources(RikyPianoMan PRIVATE
     ${RIKY_ENGINE_SOURCES}
     Source/SampleLibrary.cpp

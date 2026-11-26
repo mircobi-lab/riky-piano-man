@@ -43,13 +43,29 @@ I file restano identici agli originali, compreso `mcgreadme.txt` con le note del
 
 La tastiera si adatta allo strumento: i tasti che non suonano sono grigi, i keyswitch ambra. Il display mostra regioni, campioni, voci, ultima nota (con il nome del tasto se il file lo dichiara) e articolazione.
 
+## Accessibilità: pensato per Riky, che non vede
+
+Riky Piano Man si usa per intero con un lettore di schermo (VoiceOver su Mac, NVDA, JAWS o Assistente vocale su Windows) e con la sola tastiera. La guida completa, scritta per essere letta riga per riga, è [docs/GUIDA-RIKY.txt](docs/GUIDA-RIKY.txt); il pulsante HELP (o F1) la apre e legge a voce l'elenco dei comandi.
+
+- **Nomi e aiuti in italiano** per ogni controllo, con valori detti per esteso ("meno 3 decibel", "100 battiti al minuto", "più 2 semitoni"). I controlli dello strumento prendono il nome scritto nel file SFZ.
+- **Gruppi e ordine di Tab** pensati per l'uso: stato del pianoforte, sequencer, suono, pedali, controlli dello strumento, articolazioni, stanza, uscita, motore, accordatura, controller MIDI. All'apertura il fuoco è sul display dello stato, che si legge come testo; anche lo stato del brano è un testo che si legge con Tab.
+- **Annunci parlati** di quello che cambia: pianoforte pronto, download ogni 10%, riproduzione, conteggio, registrazione, fine della registrazione con numero di note e durata, export ogni 25% e alla fine con nome del file e picco, articolazioni, assegnazioni MIDI.
+- **Scorciatoie**: spazio o F5 suona e ferma, R o F6 registra, S ferma, D demo, Esc panic, I o F2 legge lo stato, M metronomo, C conteggio, più e meno il tempo (Pagina su e giù di dieci), Comando O apri MIDI, Comando S salva, Comando E esporta subito in MP3 senza finestre, Comando Maiuscole E in WAV, Comando L libreria, Comando M assegna al controller MIDI il controllo che ha il fuoco.
+- **Segnali sonori** che non servono lo schermo: due note che salgono quando la registrazione parte, due che scendono quando finisce, tre quando l'export è pronto, due gravi per un errore. Conteggio e metronomo a click, il primo della battuta più acuto. Non finiscono nelle registrazioni né negli export.
+- **Trasporto dal controller MIDI**: PLAY, STOP e REC funzionano con i tasti MMC (MIDI Machine Control) dei controller che li hanno, oppure si assegnano a qualsiasi tasto con Comando M sul pulsante.
+- **Finestre del sistema** per conferme e file, che i lettori di schermo conoscono già; pulsanti che non si spengono e LED che non lampeggiano, per non far perdere il fuoco o riempire di annunci.
+- Disposizione: il sequencer è subito sotto il display, dove si usa di più; per chi aiuta guardando lo schermo il controllo con il fuoco ha un bordo blu.
+
+La prova `--a11y` dell'app autonoma scrive l'albero di accessibilità come lo vede un lettore di schermo (58 elementi, tutti con un nome).
+
 ## Sequencer: demo, registrazione, export
 
 La fila SEQUENCER è un lettore e registratore MIDI a una traccia.
 
 - **DEMO** carica e suona "Riky's Theme", un brano originale scritto per questo pianoforte (Mib maggiore, 72 BPM, circa un minuto e mezzo, con pedale e dinamiche). Lo genera `tools/make_demo.py`, il file è `Resources/demo-riky-theme.mid` ed è incorporato nel plugin.
 - **LOAD** apre un file MIDI (.mid); tutte le tracce vengono unite e suonate sul pianoforte.
-- **REC** registra quello che si suona: tastiera MIDI, tastiera del pannello, pulsanti dei keyswitch e pulsante SUSTAIN (come CC 64). **STOP** chiude la ripresa: il silenzio iniziale viene tolto e le note ancora tenute vengono chiuse. Una nuova ripresa sostituisce quella in memoria.
+- **REC** registra quello che si suona: tastiera MIDI, tastiera del pannello, pulsanti dei keyswitch e pulsante SUSTAIN (come CC 64). **STOP** chiude la ripresa e le note ancora tenute vengono chiuse. Una nuova ripresa sostituisce quella in memoria.
+- **COUNT-IN**, **METRONOME** e **TEMPO**: conteggio di 1 o 2 battute prima di registrare e click durante la registrazione. Con conteggio o metronomo la ripresa resta a tempo e il file MIDI salvato ha quel tempo; senza, il silenzio iniziale viene tolto.
 - **PLAY** e **STOP** suonano e fermano il brano; la tastiera del pannello mostra le note.
 - **SAVE** salva il brano come file MIDI in Musica/Riky Piano Man/Songs.
 - **EXPORT MP3 / WAV** fa il render fuori tempo reale, alla qualità massima e a 44,1 kHz (la frequenza dei campioni del Maestro, quindi senza ricampionamento), con la stessa catena del pannello (tono, larghezza, stanza, volume). Formati: MP3 320 kbps, MP3 V0, WAV 24 bit. I file vanno in Musica/Riky Piano Man/Exports; un clic sul riquadro del brano apre la cartella. Alla fine il riquadro mostra il picco in dBFS e avvisa se c'è clipping.
@@ -73,7 +89,7 @@ Un clic sul display apre il menu: cartella dei campioni, readme dell'autore, ric
 ## Licenze e crediti
 
 - Codice di Riky Piano Man: AGPL v3 (vedi `LICENSE.md`), derivato da MBStudio91 Campione.
-- sfizz: licenza BSD a 2 clausole, © sfizz contributors.
+- sfizz: licenza BSD a 2 clausole, © sfizz contributors. Con una correzione (`cmake/patch-sfizz.cmake`) per il render fuori tempo reale: sfizz 1.2.3 non aspettava i file ancora in coda e ogni tanto la prima parte di una nota esportata restava muta (5 caricamenti su 108 nella prova, nessuno su 108 dopo la correzione).
 - LAME 3.100: licenza LGPL 2, © The LAME Project (codifica MP3).
 - Demo "Riky's Theme": brano originale scritto per Riky Piano Man, stessa licenza del progetto.
 - JUCE: licenza AGPL v3.

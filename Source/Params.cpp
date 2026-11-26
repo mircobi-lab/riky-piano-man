@@ -17,6 +17,23 @@ std::unique_ptr<Float> makeFloat (const char* pid, const juce::String& name, Ran
 }
 }
 
+juce::String accessibleValue (const juce::String& p, float v)
+{
+    // valori letti dal lettore di schermo: in italiano e senza abbreviazioni
+    if (p == id::tone)
+    {
+        const int n = juce::roundToInt (std::abs (v) * 100.f);
+        return n == 0 ? juce::String ("neutro") : (v < 0 ? "scuro " : "brillante ") + juce::String (n);
+    }
+    if (p == id::tune) { const int c = juce::roundToInt (v); return (c > 0 ? "più " : c < 0 ? "meno " : "") + juce::String (std::abs (c)) + " centesimi"; }
+    if (p == id::transpose) { const int s = juce::roundToInt (v); return s == 0 ? juce::String ("nessuna") : (s > 0 ? "più " : "meno ") + juce::String (std::abs (s)) + (std::abs (s) == 1 ? " semitono" : " semitoni"); }
+    if (p == id::volume) return v <= -59.9f ? juce::String ("spento") : (v < 0 ? "meno " : "") + juce::String (std::abs (v), 1).replaceCharacter ('.', ',') + " decibel";
+    if (p == id::tempo) return juce::String (juce::roundToInt (v)) + " battiti al minuto";
+    if (p.startsWith ("SFZ")) return juce::String (juce::roundToInt (v * 127.f)) + " su 127";
+    if (p == id::width) return juce::String (juce::roundToInt (v * 100.f)) + " per cento";
+    return juce::String (juce::roundToInt (v * 100.f)) + " per cento";
+}
+
 juce::StringArray temperamentNames()
 {
     return { "EQUAL", "WERCKMEISTER III", "VALLOTTI", "KIRNBERGER III", "MEANTONE 1/4", "PYTHAGOREAN", "JUST 5-LIMIT" };
@@ -56,6 +73,7 @@ juce::String formatValue (const juce::String& p, float v)
     if (p == id::tune) { const int c = juce::roundToInt (v); return (c > 0 ? "+" : "") + juce::String (c) + " CT"; }
     if (p == id::transpose) { const int s = juce::roundToInt (v); return (s > 0 ? "+" : "") + juce::String (s) + " ST"; }
     if (p == id::volume) return db (v);
+    if (p == id::tempo) return juce::String (juce::roundToInt (v)) + " BPM";
     if (p.startsWith ("SFZ")) return juce::String (juce::roundToInt (v * 127.f));   // come un valore CC 0..127
     return pct (v);
 }
@@ -91,6 +109,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
 
     Range vol (-60.f, 12.f, .1f); vol.setSkewForCentre (-6.f);
     l.add (makeFloat (id::volume, "Volume", vol, 0.f));
+
+    l.add (makeFloat (id::tempo, "Tempo", Range (40.f, 240.f, 1.f), 100.f));
+    l.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { id::metro, 1 }, "Metronome", false));
+    l.add (std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { id::countIn, 1 }, "Count-In", juce::StringArray { "OFF", "1 BAR", "2 BARS" }, 1));
+    l.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { id::cues, 1 }, "Audio Cues", true));
+    l.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { id::seqPlay, 1 }, "Song Play/Stop", false));
+    l.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { id::seqStop, 1 }, "Song Stop", false));
+    l.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { id::seqRec, 1 }, "Song Record", false));
     return l;
 }
 }

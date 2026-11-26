@@ -3,6 +3,7 @@
 #include "PianoEngine.h"
 #include "Sequencer.h"
 #include "Exporter.h"
+#include "Cues.h"
 #include <BinaryData.h>
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <cmath>
@@ -100,6 +101,32 @@ int main (int argc, char** argv)
 {
     if (argc < 3) { std::printf ("uso: riky_render file.sfz uscita.wav\n"); return 2; }
     juce::ScopedJuceInitialiser_GUI init;
+    if (juce::String (argv[1]).endsWith ("keyswitch-test.sfz") && juce::String (argv[2]) == "loop")
+    {
+        // diagnostica: carica lo strumento di prova tante volte e misura la prima articolazione
+        for (int run = 0; run < 36; ++run)
+        {
+            Rig k;
+            k.s.offline = true;
+            k.engine.prepare (sr, block);
+            k.engine.loadAsync (juce::File::getCurrentWorkingDirectory().getChildFile (argv[1]));
+            for (int i = 0; i < 200 && k.engine.status() == PianoEngine::Status::loading; ++i) juce::Thread::sleep (50);
+            const auto ki = k.engine.info();
+            for (int i = 0; i < (int) ki->controls.size(); ++i) k.s.slots[(size_t) i] = ki->controls[(size_t) i].defaultValue;
+            const int variant = juce::SystemStats::getEnvironmentVariable ("V", "-1").getIntValue() >= 0
+                                  ? juce::SystemStats::getEnvironmentVariable ("V", "0").getIntValue() : run % 3;   // 0 come la prova, 1 senza keyswitch, 2 con attesa di 300 ms
+            k.s.offline = juce::SystemStats::getEnvironmentVariable ("RT", "0") != "1";
+            if (variant == 2) juce::Thread::sleep (300);
+            k.s.transpose = 3;
+            auto a = variant == 1 ? k.play (1.0, { { .1, on (57, 100) }, { .9, off (57) } })
+                                  : k.play (1.0, { { .0, on (24, 100) }, { .05, off (24) }, { .1, on (57, 100) }, { .9, off (57) } });
+            std::printf ("variante %d ", variant);
+            for (auto& c : ki->controls) std::printf ("[cc%d %.3f] ", c.cc, c.defaultValue);
+            std::printf ("sw %d regioni %d ", ki->defaultSwitch, ki->regions);
+            std::printf ("run %d: %.1f dBFS  (blocco 0..0.1 %.1f)\n", run, juce::Decibels::gainToDecibels (rms (a, .3, .7)), juce::Decibels::gainToDecibels (rms (a, .0, .1)));
+        }
+        return 0;
+    }
     Rig r;
     r.s.offline = true;            // come un bounce: aspetta i campioni letti dal disco
     r.engine.prepare (sr, block);
@@ -289,6 +316,21 @@ int main (int argc, char** argv)
         const double f2 = peakFreq (b, .3, .4, 200, 600);
         check (std::abs (cents (f1, 261.626)) < 3 && std::abs (cents (f2, 523.251)) < 3,
                "articolazioni: A3+3 = C4 " + juce::String (f1, 1) + " Hz, poi un'ottava sopra " + juce::String (f2, 1) + " Hz");
+        // 10 caricamenti: la prima nota non deve mai restare muta (difetto di sfizz 1.2.3 corretto da cmake/patch-sfizz.cmake)
+        int silent = 0;
+        for (int run = 0; run < 10; ++run)
+        {
+            Rig q;
+            q.s.offline = true;
+            q.engine.prepare (sr, block);
+            q.engine.loadAsync (juce::File::getCurrentWorkingDirectory().getChildFile (argv[3]));
+            for (int i = 0; i < 200 && q.engine.status() == PianoEngine::Status::loading; ++i) juce::Thread::sleep (20);
+            if (const auto qi = q.engine.info())
+                for (int i = 0; i < (int) qi->controls.size(); ++i) q.s.slots[(size_t) i] = qi->controls[(size_t) i].defaultValue;
+            auto x = q.play (.8, { { .0, on (60, 100) }, { .7, off (60) } });
+            if (rms (x, .2, .6) < 1e-3f) ++silent;
+        }
+        check (silent == 0, "export: dieci caricamenti, la prima nota suona sempre (" + juce::String (silent) + " mute)");
         if (lvl >= 0) k.s.slots[(size_t) lvl] = 0.f;
         auto c = k.play (.6, { { .0, on (57, 100) }, { .5, off (57) } });
         check (rms (c, .1, .4) < 1e-5f, "CC 20 a zero spegne (amplitude_oncc20)");
@@ -363,6 +405,67 @@ int main (int argc, char** argv)
         check (seq.saveMidiFile (mid) && back.loadMidiFile (mid) && back.events().size() == ev.size()
                && std::abs (back.events().front().time - ev.front().time) < .001, "salvataggio e rilettura del file MIDI");
         mid.deleteFile();
+    }
+    // 16. registrazione con conteggio di una battuta a 120 BPM: parte dopo 2 s, resta allineata, il MIDI salvato è a 120 BPM
+    {
+        Sequencer seq;
+        seq.record (120.0, true);
+        juce::MidiBuffer m;
+        seq.processPlayback (m, block, sr, 2.0);
+        check (seq.state() == Sequencer::State::countIn && seq.position() < -1.9, "conteggio: parte a -2 s");
+        const int total = (int) (4.0 * sr / block);
+        bool sawRecording = false;
+        for (int i = 1; i < total; ++i)
+        {
+            juce::MidiBuffer in;
+            const double t = (double) i * block / sr;            // tempo dall'inizio del conteggio
+            if (std::abs (t - 2.5) < .5 * block / sr) in.addEvent (on (60, 90), 0);
+            if (std::abs (t - 3.0) < .5 * block / sr) in.addEvent (off (60), 0);
+            juce::MidiBuffer pm;
+            seq.processPlayback (pm, block, sr, 2.0);
+            seq.processRecording (in, block, sr, false);
+            sawRecording |= seq.state() == Sequencer::State::recording;
+        }
+        seq.stop();
+        juce::MidiBuffer m2;
+        seq.processPlayback (m2, block, sr);
+        seq.update();
+        double firstOn = -1;
+        for (auto& e : seq.events()) if (e.msg.isNoteOn()) { firstOn = e.time; break; }
+        check (sawRecording && std::abs (firstOn - .5) < .01, "dopo il conteggio la nota a 0,5 s resta a " + juce::String (firstOn, 3) + " s (nessun taglio)");
+        const auto mid = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("riky-count.mid");
+        seq.saveMidiFile (mid);
+        juce::FileInputStream fin (mid);
+        juce::MidiFile mf;
+        double tempoBpm = 0;
+        if (mf.readFrom (fin))
+            for (auto* ev : *mf.getTrack (0))
+                if (ev->message.isTempoMetaEvent()) tempoBpm = 60.0 / ev->message.getTempoSecondsPerQuarterNote();
+        check (std::abs (tempoBpm - 120.0) < .01 && std::abs (seq.bpm() - 120.0) < .01, "file MIDI della ripresa a 120 BPM");
+        mid.deleteFile();
+    }
+    // 17. segnali sonori e metronomo
+    {
+        Cues cues;
+        cues.prepare (sr);
+        juce::AudioBuffer<float> b (2, block);
+        auto renderFor = [&] (double seconds, bool enabled)
+        {
+            float pk = 0.f;
+            for (int i = 0; i < (int) (seconds * sr / block); ++i) { b.clear(); cues.render (b, enabled); pk = juce::jmax (pk, b.getMagnitude (0, block)); }
+            return pk;
+        };
+        cues.post (Cues::recStart);
+        const float a = renderFor (.4, true);
+        cues.post (Cues::done);
+        const float off = renderFor (.6, false);
+        check (a > .05f && a < .5f && off == 0.f, "segnali sonori: si sentono, e non si sentono se spenti");
+        // conteggio di una battuta a 120 BPM: 4 click, nessuno dopo lo zero con metronomo spento
+        int clicks = 0;
+        for (double t = -2.0; t < 1.0; t += block / sr) clicks += cues.scheduleBeats (t, t + block / sr, 120.0, false, block);
+        int withMetro = 0;
+        for (double t = -2.0; t < 1.0; t += block / sr) withMetro += cues.scheduleBeats (t, t + block / sr, 120.0, true, block);
+        check (clicks == 4 && withMetro == 7, "conteggio 4 click; con metronomo 7 battiti da -2 a +1 s compresi (" + juce::String (clicks) + ", " + juce::String (withMetro) + ")");
     }
     // 15. export: MP3 320 e WAV 24 bit della demo, fuori tempo reale
     if (argc > 4)

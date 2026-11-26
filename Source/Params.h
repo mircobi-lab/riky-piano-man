@@ -32,6 +32,15 @@ namespace id
     inline constexpr const char* width     = "WIDTH";     // larghezza stereo (mid/side)
     // OUTPUT
     inline constexpr const char* volume    = "VOLUME";    // dB
+    // SEQUENCER: tempo, metronomo, conteggio, segnali sonori di conferma
+    inline constexpr const char* tempo     = "TEMPO";     // BPM per metronomo, conteggio e file MIDI salvati
+    inline constexpr const char* metro     = "METRO";     // metronomo durante la registrazione
+    inline constexpr const char* countIn   = "COUNTIN";   // conteggio prima di registrare: OFF / 1 BAR / 2 BARS
+    inline constexpr const char* cues      = "CUES";      // segnali sonori (inizio e fine registrazione, export finito, errori)
+    // comandi del sequencer, da assegnare ai tasti del controller con MIDI LEARN (scattano quando vanno su ON)
+    inline constexpr const char* seqPlay   = "SEQPLAY";
+    inline constexpr const char* seqStop   = "SEQSTOP";
+    inline constexpr const char* seqRec    = "SEQREC";
 }
 
 inline constexpr int numSlots = 8;
@@ -43,6 +52,7 @@ namespace pedalCC
 
 juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
 juce::String formatValue (const juce::String& paramId, float value);
+juce::String accessibleValue (const juce::String& paramId, float value);   // per il lettore di schermo, in italiano
 inline float a4Frequency (int choice) { return choice == 1 ? 432.f : 440.f; }
 inline int sampleQuality (int choice) { return choice == 2 ? 10 : choice == 1 ? 4 : 2; }   // Hermite, sinc 12 punti, massima (come nei bounce)
 inline int polyphony (int choice) { return choice == 0 ? 64 : choice == 2 ? 256 : 128; }

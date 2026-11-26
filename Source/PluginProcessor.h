@@ -6,10 +6,11 @@
 #include "Sequencer.h"
 #include "Exporter.h"
 #include "PostChain.h"
+#include "Cues.h"
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <juce_dsp/juce_dsp.h>
 
-class RikyProcessor : public juce::AudioProcessor, private juce::Timer
+class RikyProcessor : public juce::AudioProcessor, private juce::Timer, private juce::AudioProcessorValueTreeState::Listener
 {
 public:
     RikyProcessor();
@@ -43,6 +44,12 @@ public:
     void loadPiano (const juce::File& sfz);          // un file .sfz: il Maestro o qualsiasi altro strumento SFZ
     void resetSfzControls();                         // SFZ CONTROLS ai valori scritti nel file
     void loadDemo();                                 // "Riky's Theme" nel sequencer
+    // comandi del sequencer (pannello, scorciatoie, controller MIDI con LEARN o MMC)
+    void togglePlay();
+    void stopSong();
+    void toggleRecord();
+    double countInSeconds() const;
+    riky::Cues cues;
     bool exportSong (const juce::File& dest, riky::Exporter::Format);   // render offline del brano del sequencer
     void installPiano() { library.startInstall(); }
 
@@ -72,6 +79,9 @@ private:
     juce::String slotsFile;      // file a cui si riferiscono i valori degli SFZ CONTROLS (altrimenti si usano i valori del file)
 
     void timerCallback() override;
+    void parameterChanged (const juce::String& paramId, float newValue) override;
+    std::atomic<int> transportRequests { 0 };     // 1 play/stop, 2 stop, 4 rec (da MIDI, thread audio)
+    std::atomic<float>* tempo = nullptr, *metro = nullptr, *countIn = nullptr, *cuesOn = nullptr;
     void engineChanged();
 
     void notify();

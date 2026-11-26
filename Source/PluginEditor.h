@@ -18,6 +18,54 @@ private:
     bool isSwitch (int note) const { return info != nullptr && info->switches[(size_t) note]; }
 };
 
+// Gruppo invisibile per il lettore di schermo: una sezione del pannello con il suo nome e il suo posto
+// nell'ordine di Tab (VoiceOver e NVDA annunciano "gruppo Sequencer" ecc.)
+class A11yGroup : public juce::Component
+{
+public:
+    explicit A11yGroup (const juce::String& title)
+    {
+        setTitle (title);
+        setFocusContainerType (FocusContainerType::focusContainer);
+        setInterceptsMouseClicks (false, true);
+    }
+    std::unique_ptr<juce::AccessibilityHandler> createAccessibilityHandler() override
+    {
+        return std::make_unique<juce::AccessibilityHandler> (*this, juce::AccessibilityRole::group);
+    }
+};
+
+// Riquadro di testo leggibile con Tab: il display dello stato e quello del brano.
+// Il titolo cambia con lo stato; Invio o clic fanno l'azione del riquadro.
+class A11yText : public juce::Component
+{
+public:
+    A11yText() { setWantsKeyboardFocus (true); }
+    std::function<void()> onPress;
+    void setText (const juce::String& t) { if (t != getTitle()) setTitle (t); }
+    void mouseDown (const juce::MouseEvent& e) override { if (! e.mods.isPopupMenu() && onPress) onPress(); }
+    bool keyPressed (const juce::KeyPress& k) override
+    {
+        if (k == juce::KeyPress::returnKey && onPress) { onPress(); return true; }
+        return false;
+    }
+    void focusGained (FocusChangeType) override { repaint(); }
+    void focusLost (FocusChangeType) override { repaint(); }
+    void paint (juce::Graphics& g) override
+    {
+        if (hasKeyboardFocus (false))   // anello di fuoco visibile per chi aiuta Riky guardando lo schermo
+        {
+            g.setColour (juce::Colour (0xff3d8bff));
+            g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (1.f), 4.f, 2.f);
+        }
+    }
+    std::unique_ptr<juce::AccessibilityHandler> createAccessibilityHandler() override
+    {
+        return std::make_unique<juce::AccessibilityHandler> (*this, juce::AccessibilityRole::staticText,
+            juce::AccessibilityActions().addAction (juce::AccessibilityActionType::press, [this] { if (onPress) onPress(); }));
+    }
+};
+
 // Pannello frontale di Riky Piano Man: telaio, sezioni e tastiera di MBStudio91 Campione,
 // marchio RIKY PIANO MAN e i controlli che il file SFZ dichiara.
 class RikyPanel : public juce::Component, public juce::FileDragAndDropTarget, private juce::Timer
@@ -32,16 +80,20 @@ public:
     bool isInterestedInFileDrag (const juce::StringArray&) override;
     void filesDropped (const juce::StringArray&, int, int) override;
 
-    static constexpr int baseW = 1240, baseH = 660;
+    static constexpr int baseW = 1240, baseH = 700;
+    bool keyPressed (const juce::KeyPress&) override;
+    void say (const juce::String& text, bool important = true);   // annuncio per il lettore di schermo
+    void focusStart();                                               // il fuoco va sul display dello stato
     static void paintRikyLogo (juce::Graphics&, juce::Rectangle<float> area);   // marchio RIKY PIANO MAN
 
 private:
-    enum class Kind { knob, combo, toggle, fader };
+    enum class Kind { knob, combo, toggle, fader, hslider };
     struct Ctl
     {
         Kind kind = Kind::knob;
         juce::String pid, label;
         int slot = -1;                       // SFZ CONTROLS: indice del posto
+        juce::Component* group = nullptr;    // gruppo per il lettore di schermo
         juce::Slider slider;
         juce::ComboBox combo;
         juce::TextButton button;
@@ -58,6 +110,11 @@ private:
     std::vector<Section> sections;
     juce::TextButton installBtn { "INSTALL" }, libraryBtn { "LIBRARY" }, panicBtn { "PANIC" };
     juce::OwnedArray<juce::TextButton> switchBtns;
+    A11yGroup gStatus { "Stato del pianoforte" }, gSeq { "Sequencer: demo, registrazione, esportazione" }, gPiano { "Suono del pianoforte" },
+              gPedal { "Pedali" }, gSfz { "Controlli dello strumento" }, gArt { "Articolazioni" }, gRoom { "Stanza" }, gOut { "Uscita" },
+              gEngine { "Motore" }, gTuning { "Accordatura" }, gMidi { "Controller MIDI" };
+    A11yText statusView, songView;
+    juce::TextButton helpBtn { "HELP" };
     juce::TextButton demoBtn { "DEMO" }, loadBtn { "LOAD" }, saveBtn { "SAVE" }, recBtn { "REC" }, playBtn { "PLAY" }, stopBtn { "STOP" }, exportBtn { "EXPORT MP3 / WAV" };
     juce::Rectangle<int> seqArea;
     juce::String seqMessage;
@@ -78,7 +135,21 @@ private:
     int panicFlash = 0;
     bool dragOver = false;
 
-    Ctl& add (Kind, const char* pid, const juce::String& label);
+    Ctl& add (Kind, const char* pid, const juce::String& label, juce::Component& group);
+    void place (juce::Component&, juce::Rectangle<int> panelArea);   // posiziona dentro il gruppo, con coordinate del pannello
+    void setupAccessibility();
+    void announceChanges();
+    juce::String statusText (bool full) const;
+    juce::String songText() const;
+    void announceHelp();
+    void quickExport (riky::Exporter::Format);
+    void openGuide();
+    void learnFocused (bool forget);
+    // ultimo stato annunciato
+    int saidEngine = -1, saidLib = -1, saidSeq = -1, saidSwitch = -2, saidProgress = -1;
+    juce::String saidMidiStatus, lastSongName;
+    bool saidExportBusy = false;
+    int a11yTicks = 0;
     Ctl* find (const char* pid);
     void askInstall();
     void chooseFile();

@@ -20,7 +20,7 @@ struct SeqEvent
 class Sequencer
 {
 public:
-    enum class State { stopped, playing, recording };
+    enum class State { stopped, playing, recording, countIn };
 
     // ---- thread dei messaggi
     void setEvents (std::vector<SeqEvent>, const juce::String& name);
@@ -32,20 +32,23 @@ public:
 
     void play();
     void stop();
-    void record();                               // nuova ripresa: sostituisce quella in memoria quando si ferma
+    // nuova ripresa: sostituisce quella in memoria quando si ferma. Con metronomo o conteggio ("aligned")
+    // il tempo della ripresa resta allineato alle battute e il file MIDI salvato ha quel tempo
+    void record (double bpm = 120.0, bool aligned = false);
     void update();                               // da un timer: raccoglie la registrazione e chiude la ripresa
     State state() const noexcept { return (State) stateValue.load(); }
-    double position() const noexcept { return positionSeconds.load(); }
+    double position() const noexcept { return positionSeconds.load(); }   // negativa durante il conteggio
+    double bpm() const noexcept { return takeBpm; }
     std::function<void()> onChange;              // brano cambiato o fine della registrazione
 
     static bool readMidi (juce::InputStream&, std::vector<SeqEvent>& out);
     bool loadMidiFile (const juce::File&);
     bool saveMidiFile (const juce::File&) const;
     juce::MemoryBlock toMidiData() const;
-    static juce::MidiFile toMidiFile (const std::vector<SeqEvent>&, const juce::String& name);
+    static juce::MidiFile toMidiFile (const std::vector<SeqEvent>&, const juce::String& name, double bpm = 120.0);
 
     // ---- thread audio
-    void processPlayback (juce::MidiBuffer& midi, int numSamples, double sampleRate) noexcept;    // prima della tastiera del pannello
+    void processPlayback (juce::MidiBuffer& midi, int numSamples, double sampleRate, double countInSeconds = 0.0) noexcept;    // prima della tastiera del pannello
     void processRecording (const juce::MidiBuffer& midi, int numSamples, double sampleRate, bool pedalButton) noexcept;
 
 private:
@@ -57,6 +60,8 @@ private:
     std::vector<SeqEvent> take;                  // thread dei messaggi
     juce::String takeName;
     int takeCounter = 0;
+    double takeBpm = 120.0, recBpm = 120.0;
+    bool recAligned = false;
 
     juce::SpinLock playLock;
     std::vector<SeqEvent> playData;              // copia letta dal thread audio
@@ -69,7 +74,7 @@ private:
     std::vector<SeqEvent> recording;             // thread dei messaggi
 
     // stato del thread audio
-    juce::int64 pos = 0;
+    juce::int64 pos = 0, countLeft = 0;
     size_t cursor = 0;
     std::bitset<128> sounding;
     bool sustainDown = false, lastPedalButton = false, pedalKnown = false;

@@ -126,6 +126,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: docs
       - uses: actions/download-artifact@v4
         with:
           name: mac
@@ -162,7 +165,10 @@ jobs:
             https://github.com/sfzinstruments/MatsHelgesson.MaestroConcertGrandPiano e li mette in Musica/Riky Piano Man.
             Campioni © Mats Helgesson 2003, conversione SFZ di kinwie: set gratuito, non si può vendere.
 
+            **Accessibilità**: GUIDA-RIKY.txt è la guida per l'uso con VoiceOver o NVDA (comandi da tastiera, registrazione, export, controller MIDI). Nel programma F1 la legge a voce in breve.
+
             **Demo**: RikyPianoMan-demo-Rikys-Theme.mp3 è la demo "Riky's Theme" (brano originale) esportata da GitHub con il plugin, MP3 320 kbps.
           files: |
             dist/*.zip
             dist/*.mp3
+            docs/GUIDA-RIKY.txt

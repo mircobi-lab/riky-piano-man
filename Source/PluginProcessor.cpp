@@ -13,6 +13,8 @@ RikyProcessor::RikyProcessor()
     tone = raw (id::tone); tune = raw (id::tune); transpose = raw (id::transpose); a4ref = raw (id::a4ref); velCurve = raw (id::velCurve);
     quality = raw (id::quality); poly = raw (id::poly); temper = raw (id::temper); temperKey = raw (id::temperKey);
     for (int i = 0; i < numSlots; ++i) slots[(size_t) i] = raw (id::sfzSlot (i));
+    tempo = raw (id::tempo); metro = raw (id::metro); countIn = raw (id::countIn); cuesOn = raw (id::cues);
+    for (auto* t : { id::seqPlay, id::seqStop, id::seqRec }) state.addParameterListener (t, this);
     pedal = raw (id::pedal); soft = raw (id::soft); softAmt = raw (id::softAmt);
     roomOn = raw (id::roomOn); roomSize = raw (id::roomSize); roomDamp = raw (id::roomDamp); roomMix = raw (id::roomMix);
     width = raw (id::width); volume = raw (id::volume);
@@ -32,7 +34,7 @@ RikyProcessor::RikyProcessor()
     library.onProgress = [this] { notify(); };
     library.onInstalled = [this] (const juce::File& f) { loadPiano (f); };
     sequencer.onChange = [this] { notify(); };
-    exporter.onFinished = [this] { notify(); };
+    exporter.onFinished = [this] { cues.post (exporter.result().ok ? Cues::done : Cues::error); notify(); };
 
     if (const auto f = SampleLibrary::locate(); f.existsAsFile()) engine.loadAsync (f);
     loadDemo();   // nel sequencer c'è già la demo, pronta per PLAY
@@ -58,8 +60,49 @@ void RikyProcessor::resetSfzControls()
     slotsFile = inf->file.getFullPathName();
 }
 
+void RikyProcessor::parameterChanged (const juce::String& pid, float v)
+{
+    // tasti del controller assegnati con MIDI LEARN: il comando parte quando il tasto va giù
+    if (v < .5f) return;
+    if (pid == id::seqPlay) transportRequests.fetch_or (1);
+    else if (pid == id::seqStop) transportRequests.fetch_or (2);
+    else if (pid == id::seqRec) transportRequests.fetch_or (4);
+}
+
+double RikyProcessor::countInSeconds() const
+{
+    const int bars = (int) countIn->load();
+    return bars * 4.0 * 60.0 / juce::jlimit (40.0, 240.0, (double) tempo->load());
+}
+
+void RikyProcessor::togglePlay()
+{
+    using S = Sequencer::State;
+    if (sequencer.state() == S::stopped) sequencer.play();
+    else sequencer.stop();
+}
+
+void RikyProcessor::stopSong() { sequencer.stop(); }
+
+void RikyProcessor::toggleRecord()
+{
+    using S = Sequencer::State;
+    if (sequencer.state() == S::recording || sequencer.state() == S::countIn) { sequencer.stop(); return; }
+    const bool aligned = metro->load() > .5f || (int) countIn->load() > 0;
+    sequencer.record (tempo->load(), aligned);
+}
+
 void RikyProcessor::timerCallback()
 {
+    // comandi arrivati dal MIDI
+    if (const int r = transportRequests.exchange (0); r != 0)
+    {
+        if (r & 2) stopSong();
+        else if (r & 4) toggleRecord();
+        else if (r & 1) togglePlay();
+        for (auto* t : { id::seqPlay, id::seqStop, id::seqRec })
+            if (auto* p = state.getParameter (t); p != nullptr && p->getValue() > .5f) p->setValueNotifyingHost (0.f);
+    }
     // impostazioni che sfizz accetta solo dal thread di controllo
     engine.setPolyphony (polyphony ((int) poly->load()));
     engine.setTemperament ((int) temper->load());
@@ -73,6 +116,7 @@ void RikyProcessor::timerCallback()
 RikyProcessor::~RikyProcessor()
 {
     stopTimer();
+    for (auto* t : { id::seqPlay, id::seqStop, id::seqRec }) state.removeParameterListener (t, this);
     engine.onStatusChanged = nullptr;
     sequencer.onChange = nullptr;
     exporter.onFinished = nullptr;
@@ -126,6 +170,7 @@ void RikyProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     const int block = juce::jmax (samplesPerBlock, 32);
     engine.prepare (sampleRate, block);
     post.prepare (sampleRate, block, postSettings());
+    cues.prepare (sampleRate);
     keyboardState.reset();
 }
 
@@ -134,12 +179,42 @@ void RikyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBu
     juce::ScopedNoDenormals noDenormals;
     const int n = buffer.getNumSamples();
     // il sequencer suona prima della tastiera del pannello, così i tasti si muovono anche durante la demo
-    sequencer.processPlayback (midi, n, sr);
+    // MIDI Machine Control dal controller: F0 7F <id> 06 <comando> F7 (01 stop, 02/03 play, 06 record)
+    for (const auto meta : midi)
+    {
+        const auto m = meta.getMessage();
+        if (! m.isSysEx() || m.getSysExDataSize() < 4) continue;
+        const auto* d = m.getSysExData();
+        if (d[0] == 0x7F && d[2] == 0x06)
+        {
+            if (d[3] == 0x01) transportRequests.fetch_or (2);
+            else if (d[3] == 0x02 || d[3] == 0x03) transportRequests.fetch_or (1);
+            else if (d[3] == 0x06) transportRequests.fetch_or (4);
+        }
+    }
+
+    using S = Sequencer::State;
+    const auto state0 = sequencer.state();
+    const double pos0 = sequencer.position();
+    sequencer.processPlayback (midi, n, sr, countInSeconds());
     keyboardState.processNextMidiBuffer (midi, 0, n, true);
     midiMap.process (midi);
 
     auto s = engineSettings();
     sequencer.processRecording (midi, n, sr, s.pedalButton);
+
+    // metronomo e conteggio: un click per battito, accentato sul primo della battuta (4/4)
+    const auto state1 = sequencer.state();
+    const bool metroOn = metro->load() > .5f;
+    if (state1 == S::countIn || (state1 == S::recording && (metroOn || state0 == S::countIn)))
+    {
+        const double pos1 = sequencer.position();
+        const double tStart = (state0 == S::countIn || state0 == S::recording) ? pos0 : pos1 - n / sr;
+        cues.scheduleBeats (tStart, pos1, tempo->load(), metroOn, n);
+    }
+    // inizio e fine della registrazione (con il conteggio l'inizio lo segnano già i click)
+    if (state1 == S::recording && state0 == S::stopped) cues.post (Cues::recStart);
+    if ((state0 == S::recording || state0 == S::countIn) && state1 == S::stopped) cues.post (Cues::recStop);
     s.offline = isNonRealtime();
     if (auto* ph = getPlayHead())
         if (const auto pos = ph->getPosition())
@@ -153,6 +228,7 @@ void RikyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBu
     engine.render (buffer, midi, s);
     post.process (buffer, postSettings());
     level.store (juce::jmax (post.peak(), level.load() * .8f));
+    cues.render (buffer, cuesOn->load() > .5f);   // dopo la catena: non finisce negli export
 }
 
 // ------------------------------------------------------------------------------------------------ sequencer ed export

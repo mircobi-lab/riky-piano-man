@@ -1,0 +1,114 @@
+RIKY PIANO MAN
+Guida per l'uso con lettore di schermo (VoiceOver su Mac, NVDA o Assistente vocale su Windows)
+
+Riky Piano Man e' un pianoforte a coda campionato: un Yamaha CF-3 registrato da Mats Helgesson nel 2003.
+Funziona come applicazione autonoma e come plugin VST3 o AU dentro un programma musicale.
+Questa guida si legge riga per riga: ogni paragrafo dice una cosa.
+
+
+PRIMO AVVIO
+
+Al primo avvio il pianoforte non e' ancora installato.
+Il fuoco parte dal display dello stato, che dice "Pianoforte non installato: premi Invio per scaricarlo".
+Premi Invio: si apre una finestra del sistema che chiede conferma. Scegli "Scarica".
+Il download e' di circa 256 megabyte e si fa una volta sola. L'avanzamento viene annunciato ogni 10 per cento.
+Alla fine il lettore di schermo dice "Pianoforte pronto: Maestro Concert Grand".
+I campioni vanno nella cartella Musica, sottocartella Riky Piano Man.
+
+
+COME SI MUOVE IL FUOCO
+
+Tab passa da un controllo al successivo, Maiuscole Tab torna indietro.
+I controlli sono raccolti in gruppi, in quest'ordine:
+1. Stato del pianoforte: il display che si legge, poi Installa e Libreria.
+2. Sequencer: Demo, Apri, Salva, Registra, Suona, Ferma, stato del brano, Esporta, poi metronomo, conteggio, tempo, segnali sonori, Aiuto.
+3. Suono del pianoforte: tono, accordatura fine, trasposizione, diapason, curva di dinamica.
+4. Pedali: pedale di risonanza, pedale una corda, quantita' del pedale una corda.
+5. Controlli dello strumento: i controlli scritti nel file del pianoforte, con il loro nome (volume, rilascio, rumori).
+6. Articolazioni: compaiono solo con strumenti che hanno keyswitch.
+7. Stanza, 8. Uscita, 9. Motore, 10. Accordatura, 11. Controller MIDI con Panic.
+Le manopole si girano con le frecce su e giu'. I menu si aprono con la barra spaziatrice o Invio e si scelgono con le frecce.
+Con VoiceOver si usano i comandi soliti: VO piu' frecce per muoversi, VO piu' barra spaziatrice per premere.
+
+
+COMANDI DA TASTIERA
+
+Funzionano ovunque nella finestra di Riky Piano Man.
+F1 oppure H: elenco dei comandi, letto a voce.
+F2 oppure I: stato del pianoforte e del brano (voci attive, pedali, ultima nota, posizione nel brano).
+Barra spaziatrice oppure F5: suona e ferma il brano. Se il fuoco e' su un pulsante, la barra preme il pulsante: in quel caso usa F5.
+R oppure F6: registra. Premi di nuovo R, oppure S, per fermare la registrazione.
+S: ferma.
+D: suona la demo Riky's Theme.
+Esc: Panic, spegne subito tutte le note. Durante un'assegnazione MIDI annulla l'assegnazione.
+M: metronomo acceso o spento.
+C: conteggio prima di registrare: nessuno, 1 battuta, 2 battute.
+Piu' e meno: tempo di un battito in piu' o in meno. Pagina su e Pagina giu': dieci battiti per volta.
+Comando O (Ctrl O su Windows): apri un file MIDI.
+Comando S: salva il brano come file MIDI.
+Comando E: esporta subito il brano in MP3 a 320 kilobit, senza domande, nella cartella Musica, Riky Piano Man, Exports.
+Comando Maiuscole E: lo stesso in WAV a 24 bit.
+Comando L: libreria degli strumenti.
+Comando M: assegna al controller MIDI il controllo che ha il fuoco. Poi muovi la manopola o premi il tasto del controller.
+Comando Maiuscole M: toglie l'assegnazione del controllo che ha il fuoco.
+Dentro un programma musicale alcuni tasti, come la barra spaziatrice, possono essere presi dal programma: usa F5 e F6.
+
+
+REGISTRARE
+
+1. Scegli il tempo con piu' e meno, oppure Pagina su e Pagina giu'. Il valore viene annunciato.
+2. Scegli il conteggio con C. Con una battuta di conteggio senti quattro click, il primo piu' acuto.
+3. Se vuoi il click anche mentre suoni, accendi il metronomo con M.
+4. Premi R. Dopo il conteggio la registrazione parte. Senza conteggio senti due note che salgono.
+5. Suona. Vengono registrati la tastiera MIDI, il pedale e il pulsante del pedale di risonanza.
+6. Premi R o S per fermare. Senti due note che scendono e il lettore di schermo dice quante note hai registrato e quanto dura.
+7. Barra spaziatrice o F5 per riascoltare.
+Con metronomo o conteggio la registrazione resta a tempo e il file MIDI salvato ha quel tempo.
+Senza metronomo il silenzio iniziale viene tolto.
+Una nuova registrazione sostituisce quella precedente: se vuoi tenerla, salvala prima con Comando S.
+
+
+ESPORTARE IN MP3
+
+Comando E esporta il brano in MP3. L'avanzamento viene annunciato ogni 25 per cento.
+Alla fine senti tre note che salgono e il lettore di schermo dice il nome del file e il livello di picco.
+Se dice che c'e' distorsione, abbassa il volume nel gruppo Uscita ed esporta di nuovo.
+Due note gravi indicano un errore.
+Dal pulsante Esporta si sceglie anche MP3 di qualita' variabile o WAV, con la finestra del sistema per il nome del file.
+
+
+COMANDARE IL SEQUENCER DAL CONTROLLER MIDI
+
+Cosi' non serve toccare il computer mentre si suona.
+Se il controller ha i tasti di trasporto che mandano MIDI Machine Control (MMC), Play, Stop e Record funzionano subito.
+Altrimenti si assegnano una volta sola:
+1. Con Tab porta il fuoco sul pulsante Registra.
+2. Premi Comando M. Il lettore di schermo chiede di muovere un controllo.
+3. Premi sul controller il tasto che vuoi usare per registrare. Viene annunciata l'assegnazione.
+4. Fai lo stesso con Suona o ferma e con Ferma.
+Le assegnazioni restano salvate. Si possono salvare come mappa predefinita dal pulsante Profili del controller MIDI.
+
+
+SEGNALI SONORI
+
+Due note che salgono: la registrazione e' partita.
+Due note che scendono: la registrazione e' finita.
+Tre note che salgono: esportazione finita.
+Due note gravi: errore.
+Click: conteggio e metronomo, il primo di ogni battuta piu' acuto.
+I segnali non finiscono nelle registrazioni ne' negli MP3. Si spengono con l'interruttore Segnali sonori nel gruppo Sequencer.
+
+
+DOVE SONO I FILE
+
+Musica, Riky Piano Man: i campioni del pianoforte e questa guida.
+Musica, Riky Piano Man, Songs: i file MIDI salvati.
+Musica, Riky Piano Man, Exports: gli MP3 e i WAV.
+
+
+CREDITI
+
+Campioni: Maestro Concert Grand, Mats Helgesson 2003. Set gratuito, non si puo' vendere.
+Conversione SFZ: kinwie, sfzinstruments su GitHub.
+Motore: sfizz. Codifica MP3: LAME.
+Grafica e progetto: MBStudio91.

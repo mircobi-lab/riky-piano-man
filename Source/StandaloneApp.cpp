@@ -55,7 +55,7 @@ public:
         auto args = juce::StringArray::fromTokens (cmd, true);
         auto* proc = dynamic_cast<RikyProcessor*> (mainWindow->getAudioProcessor());
         if (proc == nullptr) return;
-        juce::String shot;
+        juce::String shot, a11yReport;
         bool installing = args.contains ("--install");
         for (int i = 0; i + 1 < args.size(); ++i)
         {
@@ -64,12 +64,18 @@ public:
             else if (a == "--shot") shot = v;
             else if (a == "--install") installing = true;
             else if (a == "--param")   // --param ID=valore (valore reale del parametro)
+            {
                 if (auto* prm = dynamic_cast<juce::RangedAudioParameter*> (proc->state.getParameter (v.upToFirstOccurrenceOf ("=", false, false))))
                     prm->setValueNotifyingHost (prm->convertTo0to1 (v.fromFirstOccurrenceOf ("=", false, false).getFloatValue()));
+            }
+            else if (a == "--a11y") a11yReport = v;
             else if (a == "--profile") proc->midiMap.applyProfile (v.getIntValue());
             else if (a == "--learn") proc->midiMap.setLearnMode (true);
         }
         if (installing) proc->installPiano();
+        if (a11yReport.isNotEmpty())
+            juce::Timer::callAfterDelay (3000, [this, a11yReport] { writeA11yReport (juce::File (a11yReport)); if (shotPath.isEmpty()) systemRequestedQuit(); });
+        shotPath = shot;
         if (shot.isNotEmpty()) waitAndShoot (shot, installing, 0);
     }
 
@@ -97,6 +103,42 @@ public:
             snapshot (juce::File (shot));
             systemRequestedQuit();
         });
+    }
+
+    // --a11y FILE: albero di accessibilità nell'ordine di Tab, come lo vede un lettore di schermo
+    void writeA11yReport (const juce::File& f)
+    {
+        auto* ed = mainWindow->getAudioProcessor()->getActiveEditor();
+        if (ed == nullptr) return;
+        juce::String out;
+        int missing = 0, n = 0;
+        std::function<void (juce::AccessibilityHandler&, int)> walk = [&] (juce::AccessibilityHandler& h, int depth)
+        {
+            for (auto* hh : h.getChildren())   // nell'ordine di navigazione del lettore di schermo
+            {
+                const auto role = hh->getRole();
+                const bool silent = role == juce::AccessibilityRole::ignored || role == juce::AccessibilityRole::unspecified;
+                if (! silent)
+                {
+                    ++n;
+                    const auto title = hh->getTitle();
+                    if (title.trim().isEmpty()) ++missing;
+                    out << juce::String::repeatedString ("  ", depth) << "[" << (int) role << "] " << (title.isEmpty() ? juce::String ("(SENZA NOME)") : title);
+                    if (auto* v = hh->getValueInterface()) out << "  = " << v->getCurrentValueAsString();
+                    if (hh->getHelp().isNotEmpty()) out << "   | " << hh->getHelp();
+                    out << "\n";
+                }
+                walk (*hh, silent ? depth : depth + 1);
+            }
+        };
+        if (auto* root = ed->getTopLevelComponent()->getAccessibilityHandler())
+        {
+            out << "radice: " << root->getTitle() << ", figli " << (int) root->getChildren().size() << "\n";
+            walk (*root, 0);
+        }
+        else out << "nessun gestore di accessibilità per l'editor\n";
+        out = "elementi: " + juce::String (n) + ", senza nome: " + juce::String (missing) + "\n" + out;
+        f.replaceWithText (out);
     }
 
     void snapshot (const juce::File& f)
@@ -129,6 +171,7 @@ private:
     juce::ApplicationProperties appProperties;
     mbstudio::ui::HardwareLookAndFeel hardwareLook;
     std::unique_ptr<juce::StandaloneFilterWindow> mainWindow;
+    juce::String shotPath;
 };
 
 JUCE_CREATE_APPLICATION_DEFINE (RikyStandaloneApp)

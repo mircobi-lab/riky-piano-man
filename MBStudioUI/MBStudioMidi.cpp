@@ -615,11 +615,15 @@ MidiControls::MidiControls (MidiMapper& m) : map (m)
 {
     learnBtn.getProperties().set ("led", true);
     learnBtn.getProperties().set ("ledColour", C::ledAmber.toString());
-    learnBtn.setTooltip ("MIDI LEARN: clic su un controllo del pannello, poi muovi la manopola del controller. Clic destro su un controllo per altre opzioni");
     learnBtn.onClick = [this] { map.setLearnMode (! map.isLearnMode()); };
+    learnBtn.setTitle ("Apprendimento MIDI");
+    learnBtn.setHelpText (juce::CharPointer_UTF8 ("Con il mouse: clic sul controllo e poi muovi il controller. Con la tastiera: seleziona un controllo con Tab e premi Comando M."));
+    learnBtn.setTooltip (learnBtn.getHelpText());
+    ctrlBtn.setTitle ("Profili del controller MIDI");
+    ctrlBtn.setHelpText (juce::CharPointer_UTF8 ("Profili pronti per i controller più diffusi, mappa predefinita, elenco delle assegnazioni."));
+    ctrlBtn.setTooltip (ctrlBtn.getHelpText());
     ctrlBtn.getProperties().set ("led", true);
     ctrlBtn.getProperties().set ("ledColour", C::ledBlue.toString());
-    ctrlBtn.setTooltip ("Profili pronti per controller MIDI, mappa predefinita, elenco delle assegnazioni");
     ctrlBtn.onClick = [this] { showControllerMenu(); };
     addAndMakeVisible (learnBtn);
     addAndMakeVisible (ctrlBtn);
