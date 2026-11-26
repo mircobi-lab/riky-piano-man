@@ -48,6 +48,11 @@ else()
 endif()
 
 # ---- sfizz (libreria statica, senza client)
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    # atomic_queue (dentro sfizz 1.2.3) usa "template" senza lista di argomenti: da clang 19 è un errore,
+    # qui torna a essere un avviso. -Wno-unknown-warning-option per i clang più vecchi che non lo conoscono.
+    add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-Wno-unknown-warning-option;-Wno-missing-template-arg-list-after-template-kw>")
+endif()
 set(SFIZZ_JACK OFF CACHE BOOL "" FORCE)
 set(SFIZZ_RENDER OFF CACHE BOOL "" FORCE)
 set(SFIZZ_SHARED OFF CACHE BOOL "" FORCE)
