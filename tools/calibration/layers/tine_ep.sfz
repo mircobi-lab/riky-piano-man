@@ -1,0 +1,6 @@
+// TINE E.PIANO - Riky Piano Man (originale, oscillatori di sfizz)
+<global> lokey=0 hikey=127 pitch_keycenter=60 ampeg_attack=0.003 ampeg_sustain=0 ampeg_release=0.4 amp_veltrack=85 amplfo_freq=4.2 amplfo_depth=1.2 volume=-3
+<region> sample=*sine ampeg_decay=6
+<region> sample=*sine transpose=12 volume=-20 ampeg_decay=2.5
+<region> sample=*saw volume=-14 fil_type=lpf_2p cutoff=250 fil_veltrack=4200 ampeg_decay=0.7 amp_veltrack=100 amp_velcurve_64=0.2 amp_velcurve_127=1
+<region> sample=*triangle transpose=28 volume=-30 ampeg_decay=0.15 amp_veltrack=100

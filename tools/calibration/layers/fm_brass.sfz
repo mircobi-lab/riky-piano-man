@@ -1,0 +1,5 @@
+// FM BRASS - Riky Piano Man (originale, oscillatori di sfizz)
+<global> lokey=0 hikey=127 pitch_keycenter=60 ampeg_attack=0.035 ampeg_sustain=100 ampeg_release=0.25 amp_veltrack=60 fil_type=lpf_2p cutoff=380 resonance=1.5 fil_veltrack=1500 fileg_attack=0.07 fileg_decay=0.6 fileg_sustain=45 fileg_depth=3400 volume=-14
+<region> sample=*saw tune=-5 pan=-25
+<region> sample=*saw tune=5 pan=25
+<region> sample=*square transpose=-12 volume=-12

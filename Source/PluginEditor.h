@@ -85,6 +85,7 @@ public:
     void say (const juce::String& text, bool important = true);   // annuncio per il lettore di schermo
     void focusStart();                                               // il fuoco va sul display dello stato
     static void paintRikyLogo (juce::Graphics&, juce::Rectangle<float> area);   // marchio RIKY PIANO MAN
+    void setPage (int newPage, bool announce);                       // 0 pianoforte, 1 modifica del suono
 
 private:
     enum class Kind { knob, combo, toggle, fader, hslider };
@@ -103,7 +104,7 @@ private:
         juce::Rectangle<int> cell;
         juce::Component& comp() { return kind == Kind::combo ? (juce::Component&) combo : kind == Kind::toggle ? (juce::Component&) button : (juce::Component&) slider; }
     };
-    struct Section { juce::String title, scope; juce::Rectangle<int> area; };
+    struct Section { juce::String title, scope; juce::Rectangle<int> area; int page = 0; };
 
     RikyProcessor& proc;
     std::vector<std::unique_ptr<Ctl>> ctls;
@@ -112,7 +113,22 @@ private:
     juce::OwnedArray<juce::TextButton> switchBtns;
     A11yGroup gStatus { "Stato del pianoforte" }, gSeq { "Sequencer: demo, registrazione, esportazione" }, gPiano { "Suono del pianoforte" },
               gPedal { "Pedali" }, gSfz { "Controlli dello strumento" }, gArt { "Articolazioni" }, gRoom { "Stanza" }, gOut { "Uscita" },
-              gEngine { "Motore" }, gTuning { "Accordatura" }, gMidi { "Controller MIDI" };
+              gEngine { "Motore" }, gTuning { "Accordatura" }, gMidi { "Controller MIDI" },
+              gPages { "Pagine del pannello" }, gPreset { "Preset del suono" }, gInstr { "Feltro e attacco" }, gEq { "Equalizzatore" },
+              gFilter { "Filtri" }, gTape { "Nastro" }, gLevel { "Livello del suono su misura" }, gComp { "Compressore" },
+              gLayer { "Secondo strato" }, gArp { "Arpeggiatore" };
+    // pagina 0: suona (pianoforte, pedali, motore...); pagina 1: modifica del suono (preset, EQ, compressore, strato, arpeggio)
+    int page = 0;
+    juce::TextButton pianoTab { "PIANO" }, editTab { "EDIT SOUND" };
+    juce::ComboBox presetBox;
+    juce::TextButton presetPrev { "<" }, presetNext { ">" }, presetSave { "SAVE" };
+    int shownPreset = -1, shownPresetCount = -1, saidPreset = -2;
+    bool shownEdited = false;
+    void refreshPresetBox();
+    void choosePreset (int index, bool announce);
+    juce::String presetSpoken() const;          // "Preset 4 di 17: Felt Piano, modificato"
+    void askPresetName();
+    std::vector<juce::Component*> pageGroups (int pageIndex);
     A11yText statusView, songView;
     juce::TextButton helpBtn { "HELP" };
     juce::TextEditor commandBox;          // per la tastiera braille: si scrive "suona", "registra", "tempo 90"...
@@ -184,6 +200,7 @@ public:
     ~RikyEditor() override;
     void paint (juce::Graphics&) override;
     void resized() override;
+    RikyPanel& getPanel() { return panel; }
 private:
     mbstudio::ui::HardwareLookAndFeel lnf;
     RikyProcessor& proc;

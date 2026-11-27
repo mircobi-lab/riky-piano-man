@@ -1,0 +1,118 @@
+{
+ "C3": {
+  "vals": {
+   "EQLOW": -0.5,
+   "EQLMID": -6.0,
+   "EQLMIDF": 1000,
+   "EQHMID": -2.0,
+   "TAPE": 0.35,
+   "COMP": 1,
+   "COMPTHR": -22,
+   "COMPRATIO": 2,
+   "WIDTH": 1.2,
+   "ROOMMIX": 0.22,
+   "EQHIGH": 0.0
+  },
+  "err": 1.1679440575932685,
+  "level": -21.977117432413724
+ },
+ "U1": {
+  "vals": {
+   "EQLMID": 12.0,
+   "EQLMIDF": 1000,
+   "EQHIGH": 9.5,
+   "COMP": 1,
+   "COMPTHR": -24,
+   "COMPRATIO": 2.5,
+   "WIDTH": 2.0,
+   "ROOMSIZE": 0.3,
+   "ROOMMIX": 0.16,
+   "EQLOW": 2.5,
+   "EQHMID": 0.5
+  },
+  "err": 1.8845654120801731,
+  "level": -12.7845266458682
+ },
+ "FELT": {
+  "vals": {
+   "FELT": 0.6,
+   "ATTACK": 0.3,
+   "EQLOW": 0.5,
+   "EQLMID": -1.0,
+   "EQLMIDF": 1000,
+   "EQHMID": 1.0,
+   "WIDTH": 1.8,
+   "ROOMSIZE": 0.6,
+   "ROOMMIX": 0.28,
+   "EQHIGH": 12.0
+  },
+  "err": 4.8303542046298045,
+  "level": -25.85858033130752
+ },
+ "C3B": {
+  "vals": {
+   "EQLOW": 0.5,
+   "EQLMID": -8.0,
+   "EQLMIDF": 1000,
+   "EQHMID": 8.5,
+   "EQHIGH": 12.0,
+   "TAPE": 0.3,
+   "COMP": 1,
+   "COMPTHR": -22,
+   "COMPRATIO": 2,
+   "WIDTH": 1.2,
+   "ROOMMIX": 0.22
+  },
+  "err": 2.6535734589110276,
+  "level": -21.173068699726638
+ },
+ "U1B": {
+  "vals": {
+   "EQLOW": -4.5,
+   "EQLMID": -4.0,
+   "EQLMIDF": 1000,
+   "EQHIGH": 10.5,
+   "COMP": 1,
+   "COMPTHR": -24,
+   "COMPRATIO": 2.5,
+   "WIDTH": 2.0,
+   "ROOMSIZE": 0.3,
+   "ROOMMIX": 0.16,
+   "EQHMID": -2.5
+  },
+  "err": 1.7294961084307308,
+  "level": -20.61468761105602
+ },
+ "FELTB": {
+  "vals": {
+   "FELT": 0.4,
+   "ATTACK": 0.2,
+   "EQLMID": -3.0,
+   "EQLMIDF": 1000,
+   "WIDTH": 1.5,
+   "ROOMSIZE": 0.6,
+   "ROOMMIX": 0.26,
+   "EQLOW": 0.5,
+   "EQHMID": 0.0,
+   "EQHIGH": 12.0
+  },
+  "err": 2.11901753086989,
+  "level": -27.9605815717338
+ },
+ "MONO": {
+  "vals": {
+   "FELT": 0.55,
+   "ATTACK": 0.3,
+   "EQLOW": -12.0,
+   "EQLMID": -4.0,
+   "EQLMIDF": 1000,
+   "EQHMID": 6.0,
+   "EQHIGH": 12.0,
+   "NOISE": 0.55,
+   "WIDTH": 0,
+   "ROOMMIX": 0.14
+  },
+  "err": 4.849179715729766,
+  "level": -27.036115596223024
+ }
+}

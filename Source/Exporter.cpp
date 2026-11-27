@@ -123,6 +123,31 @@ Exporter::Result Exporter::renderNow (Job job, std::function<bool (float)> progr
     job.engine.offline = true;
     job.engine.hasTransport = false;
 
+    // secondo strato
+    PianoEngine layer;
+    const bool useLayer = job.voices.layerOn && job.layerGain > 0.f;
+    if (useLayer)
+    {
+        layer.setTemperament (job.temperament);
+        layer.setPolyphony (job.polyphony);
+        layer.prepare (sr, block);
+        if (job.layerText.isNotEmpty()) layer.loadTextAsync (job.layerSfz, job.layerText);
+        else layer.loadAsync (job.layerSfz);
+        for (int i = 0; i < 1200 && layer.status() == PianoEngine::Status::loading; ++i)
+        {
+            if (! progress (0.f)) { r.text = "CANCELLED"; return r; }
+            juce::Thread::sleep (25);
+        }
+        if (layer.status() != PianoEngine::Status::ready) { r.text = "LAYER NOT LOADED: " + layer.errorText(); return r; }
+    }
+    job.voices.layerOn = useLayer;
+    job.layerEngine.offline = true;
+    job.layerEngine.hasTransport = false;
+    Voicing voicing;
+    voicing.prepare (sr);
+    juce::MidiBuffer mainMidi, layerMidi;
+    juce::AudioBuffer<float> layerBuf (2, block);
+
     PostChain post;
     post.prepare (sr, block, job.post);
 
@@ -168,7 +193,15 @@ Exporter::Result Exporter::renderNow (Job job, std::function<bool (float)> progr
                 midi.addEvent (job.events[cursor].msg, (int) juce::jlimit<juce::int64> (0, block - 1, at - pos));
             }
             buf.setSize (2, block, false, false, true);
-            engine.render (buf, midi, job.engine);
+            mainMidi.clear();
+            layerMidi.clear();
+            voicing.process (midi, block, job.voices, mainMidi, layerMidi);
+            engine.render (buf, mainMidi, job.engine);
+            if (useLayer)
+            {
+                layer.render (layerBuf, layerMidi, job.layerEngine);
+                for (int c = 0; c < 2; ++c) buf.addFrom (c, 0, layerBuf, c, 0, block, job.layerGain);
+            }
             post.process (buf, job.post);
             peak = juce::jmax (peak, post.peak());
 

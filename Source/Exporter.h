@@ -2,6 +2,7 @@
 #include "PianoEngine.h"
 #include "PostChain.h"
 #include "Sequencer.h"
+#include "Voicing.h"
 #include <juce_core/juce_core.h>
 
 namespace riky
@@ -22,6 +23,12 @@ public:
         int temperament = 0, polyphony = 128;
         Format format = Format::mp3_320;
         double sampleRate = 44100.0;          // il Maestro è registrato a 44,1 kHz: nessun ricampionamento
+        // secondo strato e arpeggiatore, come sul pannello
+        VoiceSettings voices;
+        juce::File layerSfz;                  // file (o percorso virtuale per i suoni interni)
+        juce::String layerText;               // testo SFZ dei suoni interni
+        EngineSettings layerEngine;
+        float layerGain = 0.f;
     };
     struct Result { bool ok = false; juce::String text; juce::File file; float peakDb = -100.f; double seconds = 0; };
 

@@ -69,20 +69,37 @@ installa: scarica il pianoforte.
 audio: apre la finestra Audio e MIDI (scheda audio, ingressi MIDI).
 guida: apre questa guida.
 aiuto: elenco dei comandi.
+Comandi del suono:
+preset 4: sceglie il preset numero 4. preset felt: il primo preset che ha "felt" nel nome. preset + e preset -: successivo e precedente.
+preset da solo dice quale preset suona. elenco: tutti i preset con il numero.
+modifica: va alla pagina Modifica del suono. piano: torna alla pagina del pianoforte.
+feltro 40, attacco 20, nastro 30, fruscio 0: valori da 0 a 100.
+strato si, strato no: secondo strato acceso o spento.
+arpeggio si, arpeggio no: arpeggiatore.
+compressore si, compressore no.
+split 60: nota di divisione della tastiera, come numero MIDI (60 e' il Do centrale).
+salva preset Mio piano: salva il suono attuale con quel nome.
 Dentro il campo Comando le lettere vanno nel campo: le scorciatoie a una lettera funzionano fuori dal campo.
 
 
 COME SI MUOVE IL FUOCO
 
 Tab passa da un controllo al successivo, Maiuscole Tab torna indietro.
-I controlli sono raccolti in gruppi, in quest'ordine:
+Il pannello ha due pagine: Pianoforte e Modifica del suono. F3 passa dall'una all'altra.
+I primi gruppi ci sono sempre:
 1. Stato del pianoforte: il display che si legge, poi Installa e Libreria.
-2. Sequencer: campo Comando, Demo, Apri, Salva, Registra, Suona, Ferma, stato del brano, Esporta, poi metronomo, conteggio, tempo, segnali sonori, Aiuto.
-3. Suono del pianoforte: tono, accordatura fine, trasposizione, diapason, curva di dinamica.
-4. Pedali: pedale di risonanza, pedale una corda, quantita' del pedale una corda.
-5. Controlli dello strumento: i controlli scritti nel file del pianoforte, con il loro nome (volume, rilascio, rumori).
-6. Articolazioni: compaiono solo con strumenti che hanno keyswitch.
-7. Stanza, 8. Uscita, 9. Motore, 10. Accordatura, 11. Controller MIDI con Panic.
+2. Pagine del pannello: Pagina pianoforte e Pagina modifica del suono.
+3. Sequencer: campo Comando, Demo, Apri, Salva, Registra, Suona, Ferma, stato del brano, Esporta, poi metronomo, conteggio, tempo, segnali sonori, Aiuto.
+Nella pagina Pianoforte seguono:
+4. Suono del pianoforte: tono, accordatura fine, trasposizione, diapason, curva di dinamica.
+5. Pedali: pedale di risonanza, pedale una corda, quantita' del pedale una corda.
+6. Controlli dello strumento: i controlli scritti nel file del pianoforte, con il loro nome (volume, rilascio, rumori).
+7. Articolazioni: compaiono solo con strumenti che hanno keyswitch.
+8. Stanza, 9. Uscita, 10. Motore, 11. Accordatura.
+Nella pagina Modifica del suono seguono:
+4. Preset del suono, 5. Feltro e attacco, 6. Equalizzatore, 7. Filtri, 8. Nastro, 9. Livello del suono su misura,
+10. Compressore, 11. Secondo strato, 12. Arpeggiatore.
+In fondo, in tutte e due le pagine: Controller MIDI con Panic.
 Le manopole si girano con le frecce su e giu'. I menu si aprono con la barra spaziatrice o Invio e si scelgono con le frecce.
 Con NVDA e JAWS si usano Tab, frecce, Invio e barra spaziatrice come in ogni programma. Se NVDA dovesse passare in modalita' navigazione, NVDA piu' barra spaziatrice torna alla modalita' focus.
 
@@ -99,6 +116,8 @@ D: suona la demo Riky's Theme.
 Esc: Panic, spegne subito tutte le note. Durante un'assegnazione MIDI annulla l'assegnazione.
 M: metronomo acceso o spento.
 C: conteggio prima di registrare: nessuno, 1 battuta, 2 battute.
+F3: pagina Pianoforte o pagina Modifica del suono.
+F7 e F8: preset precedente e successivo. Il nome del preset viene annunciato con una frase che lo descrive.
 Piu' e meno: tempo di un battito in piu' o in meno. Pagina su e Pagina giu': dieci battiti per volta.
 Ctrl O (Ctrl O su Windows): apri un file MIDI.
 Ctrl S: salva il brano come file MIDI.
@@ -109,6 +128,49 @@ Ctrl M: assegna al controller MIDI il controllo che ha il fuoco. Poi muovi la ma
 Ctrl virgola: finestra Audio e MIDI.
 Ctrl Maiuscole M: toglie l'assegnazione del controllo che ha il fuoco.
 Dentro un programma musicale alcuni tasti, come la barra spaziatrice, possono essere presi dal programma: usa F5 e F6.
+
+
+I PRESET DEL SUONO
+
+Un preset e' un suono pronto. Il primo e' il Maestro Concert Grand com'e' registrato.
+Gli altri sedici imitano il colore dei Character Pianos di Yamaha Montage, partendo dal Maestro:
+2 Nashville C3: mezzacoda caldo passato su nastro.
+3 U1 verticale: medi in avanti, molto largo, stanza piccola.
+4 Felt Piano: verticale con il feltro, morbido e ovattato.
+5 Nashville C3 con piano elettrico FM.
+6 Nashville C3 brillante.
+7 U1 verticale brillante.
+8 Felt Piano brillante: feltro piu' leggero.
+9 Felt Mono: feltro in mono con il fruscio del nastro.
+10 Nashville C3 con pad.
+11 U1 verticale con piano elettrico a lamelle.
+12 Felt Piano con pad.
+13 U1 verticale con Felt Piano.
+14 Nashville C3 con ottoni FM.
+15 Nashville C3 con pad di feltro.
+16 Felt Piano con arpeggio: tieni un accordo e l'arpeggio sale e scende su due ottave, a 125 battiti.
+17 C3 ballata con arpeggio: l'accordo tenuto diventa un arpeggio di ottavi sul pianoforte, con un pad sotto, a 86 battiti.
+Si scelgono con F7 e F8, nel menu Preset del suono della pagina Modifica, nel campo Comando (preset 4) oppure con il cambio di programma (Program Change) del controller MIDI: programma 1 e' il Maestro, programma 2 Nashville C3 e cosi' via.
+Tutti i preset suonano forti quanto il Maestro: cambiare preset non fa saltare il volume.
+I preset 16 e 17 cambiano anche il tempo, perche' l'arpeggio va a tempo.
+Se cambi un controllo, il preset risulta modificato: il lettore di schermo lo dice e il display mostra un asterisco. Per tenerlo, salvalo con un nome: pulsante Salva il preset, oppure nel campo Comando salva preset e il nome.
+
+
+LA PAGINA MODIFICA DEL SUONO
+
+Feltro: un feltro tra martelletti e corde, il suono diventa ovattato. Le note forti restano piu' chiare di quelle piano.
+Attacco morbido: toglie il colpo all'inizio di ogni nota.
+Equalizzatore: bassi, medio bassi con la loro frequenza, medio alti con la loro frequenza, acuti. In decibel, zero e' neutro.
+Filtri: passa alto toglie i bassi, passa basso toglie gli acuti. Agli estremi sono spenti.
+Nastro: il suono di un registratore a nastro, picchi morbidi e bassi pieni. Fruscio: il soffio del nastro, si sente solo mentre suoni.
+Livello del suono su misura: alza o abbassa tutto dopo le modifiche.
+Compressore: avvicina le note forti e quelle piano. Soglia, rapporto, attacco e rilascio.
+Secondo strato: aggiunge un suono al pianoforte. Suoni: pianoforte con feltro, piano elettrico FM, piano elettrico a lamelle, pad caldo, pad sintetico, ottoni FM, pad di feltro, basso sintetico.
+Zona: il secondo strato suona su tutta la tastiera, solo sotto lo split o solo sopra. Con lo split il pianoforte suona nell'altra zona: per esempio basso sintetico sotto il Do centrale e pianoforte sopra.
+Arpeggiatore: tieni un accordo e le note suonano una alla volta, al tempo del sequencer o del programma musicale. Modo (su, giu', su e giu', casuale, come suonate, accordo), velocita', ottave e durata delle note. Puo' suonare su entrambi gli strati o solo su uno.
+Se registri con l'arpeggio acceso, nel brano restano gli accordi che hai suonato: quando il brano suona, l'arpeggio li ripete uguali.
+L'interruttore Suono su misura acceso spegne in un colpo feltro, equalizzatore, filtri, nastro, compressore e livello, per sentire la differenza.
+Tutto quello che si sente esce anche negli MP3 esportati.
 
 
 REGISTRARE
@@ -161,6 +223,7 @@ DOVE SONO I FILE
 Musica, Riky Piano Man: i campioni del pianoforte e questa guida.
 Musica, Riky Piano Man, Songs: i file MIDI salvati.
 Musica, Riky Piano Man, Exports: gli MP3 e i WAV.
+Musica, Riky Piano Man, Presets: i preset salvati da te.
 
 
 CREDITI
@@ -168,4 +231,6 @@ CREDITI
 Campioni: Maestro Concert Grand, Mats Helgesson 2003. Set gratuito, non si puo' vendere.
 Conversione SFZ: kinwie, sfzinstruments su GitHub.
 Motore: sfizz. Codifica MP3: LAME.
+Preset Character Pianos: imitazioni del colore delle Performance di Yamaha Montage, fatte partendo dal Maestro. Nessun campione Yamaha.
+Suoni del secondo strato: scritti per Riky Piano Man con gli oscillatori di sfizz.
 Grafica e progetto: MBStudio91.

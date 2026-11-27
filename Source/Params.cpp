@@ -9,6 +9,26 @@ using Range = juce::NormalisableRange<float>;
 
 juce::String db (float d) { return d <= -59.9f ? "-INF DB" : juce::String (d, 1) + " DB"; }
 juce::String pct (float v) { return juce::String (juce::roundToInt (v * 100.f)) + "%"; }
+juce::String hz (float v) { return v >= 1000.f ? juce::String (v / 1000.f, v >= 10000.f ? 1 : 2) + " KHZ" : juce::String (juce::roundToInt (v)) + " HZ"; }
+juce::String hzIt (float v) { return v >= 1000.f ? juce::String (v / 1000.f, 1).replaceCharacter ('.', ',') + " kilohertz" : juce::String (juce::roundToInt (v)) + " hertz"; }
+juce::String signedDb (float v) { const float r = std::round (v * 2.f) / 2.f; return (r > 0 ? "+" : "") + juce::String (r, 1) + " DB"; }
+juce::String signedDbIt (float v)
+{
+    const float r = std::round (v * 2.f) / 2.f;
+    if (std::abs (r) < .05f) return "zero decibel";
+    return (r > 0 ? juce::String (juce::CharPointer_UTF8 ("più ")) : "meno ") + juce::String (std::abs (r), 1).replaceCharacter ('.', ',') + " decibel";
+}
+bool isDbParam (const juce::String& p) { return p == id::eqLow || p == id::eqLMid || p == id::eqHMid || p == id::eqHigh || p == id::trim; }
+bool isHzParam (const juce::String& p) { return p == id::hpf || p == id::lpf || p == id::eqLMidF || p == id::eqHMidF; }
+
+std::unique_ptr<juce::AudioParameterChoice> makeChoice (const char* pid, const juce::String& name, const juce::StringArray& items, int def)
+{
+    return std::make_unique<juce::AudioParameterChoice> (juce::ParameterID { pid, 1 }, name, items, def);
+}
+std::unique_ptr<juce::AudioParameterBool> makeBool (const char* pid, const juce::String& name, bool def)
+{
+    return std::make_unique<juce::AudioParameterBool> (juce::ParameterID { pid, 1 }, name, def);
+}
 
 std::unique_ptr<Float> makeFloat (const char* pid, const juce::String& name, Range r, float def)
 {
@@ -25,12 +45,28 @@ juce::String accessibleValue (const juce::String& p, float v)
         const int n = juce::roundToInt (std::abs (v) * 100.f);
         return n == 0 ? juce::String ("neutro") : (v < 0 ? "scuro " : "brillante ") + juce::String (n);
     }
-    if (p == id::tune) { const int c = juce::roundToInt (v); return (c > 0 ? "più " : c < 0 ? "meno " : "") + juce::String (std::abs (c)) + " centesimi"; }
-    if (p == id::transpose) { const int s = juce::roundToInt (v); return s == 0 ? juce::String ("nessuna") : (s > 0 ? "più " : "meno ") + juce::String (std::abs (s)) + (std::abs (s) == 1 ? " semitono" : " semitoni"); }
+    if (p == id::tune) { const int c = juce::roundToInt (v); return (c > 0 ? juce::String (juce::CharPointer_UTF8 ("più ")) : c < 0 ? "meno " : "") + juce::String (std::abs (c)) + " centesimi"; }
+    if (p == id::transpose) { const int s = juce::roundToInt (v); return s == 0 ? juce::String ("nessuna") : (s > 0 ? juce::String (juce::CharPointer_UTF8 ("più ")) : "meno ") + juce::String (std::abs (s)) + (std::abs (s) == 1 ? " semitono" : " semitoni"); }
     if (p == id::volume) return v <= -59.9f ? juce::String ("spento") : (v < 0 ? "meno " : "") + juce::String (std::abs (v), 1).replaceCharacter ('.', ',') + " decibel";
     if (p == id::tempo) return juce::String (juce::roundToInt (v)) + " battiti al minuto";
     if (p.startsWith ("SFZ")) return juce::String (juce::roundToInt (v * 127.f)) + " su 127";
     if (p == id::width) return juce::String (juce::roundToInt (v * 100.f)) + " per cento";
+    if (isDbParam (p)) return signedDbIt (v);
+    if (p == id::hpf) return v <= 20.5f ? juce::String ("spento") : hzIt (v);
+    if (p == id::lpf) return v >= 19900.f ? juce::String ("spento") : hzIt (v);
+    if (isHzParam (p)) return hzIt (v);
+    if (p == id::compThr) return "meno " + juce::String (juce::roundToInt (-v)) + " decibel";
+    if (p == id::compRatio) return juce::String (v, 1).replaceCharacter ('.', ',') + " a 1";
+    if (p == id::compAtt || p == id::compRel) return juce::String (v, v < 10.f ? 1 : 0).replaceCharacter ('.', ',') + " millisecondi";
+    if (p == id::l2Vol) return v <= -39.9f ? juce::String ("spento") : signedDbIt (v);
+    if (p == id::l2Oct) { const int o = juce::roundToInt (v); return o == 0 ? juce::String ("nessuna") : (o > 0 ? juce::String (juce::CharPointer_UTF8 ("più ")) : "meno ") + juce::String (std::abs (o)) + (std::abs (o) == 1 ? " ottava" : " ottave"); }
+    if (p == id::split)
+    {
+        static const char* n[] = { "Do", "Do diesis", "Re", "Re diesis", "Mi", "Fa", "Fa diesis", "Sol", "Sol diesis", "La", "La diesis", "Si" };
+        const int k = juce::roundToInt (v);
+        return juce::String (n[k % 12]) + " " + juce::String (k / 12 - 1);
+    }
+    if (p == id::arpOct) { const int o = juce::roundToInt (v); return juce::String (o) + (o == 1 ? " ottava" : " ottave"); }
     return juce::String (juce::roundToInt (v * 100.f)) + " per cento";
 }
 
@@ -75,6 +111,22 @@ juce::String formatValue (const juce::String& p, float v)
     if (p == id::volume) return db (v);
     if (p == id::tempo) return juce::String (juce::roundToInt (v)) + " BPM";
     if (p.startsWith ("SFZ")) return juce::String (juce::roundToInt (v * 127.f));   // come un valore CC 0..127
+    if (isDbParam (p)) return signedDb (v);
+    if (p == id::hpf) return v <= 20.5f ? juce::String ("OFF") : hz (v);
+    if (p == id::lpf) return v >= 19900.f ? juce::String ("OFF") : hz (v);
+    if (isHzParam (p)) return hz (v);
+    if (p == id::compThr) return juce::String (juce::roundToInt (v)) + " DB";
+    if (p == id::compRatio) return juce::String (v, 1) + ":1";
+    if (p == id::compAtt || p == id::compRel) return juce::String (v, v < 10.f ? 1 : 0) + " MS";
+    if (p == id::l2Vol) return v <= -39.9f ? juce::String ("OFF") : signedDb (v);
+    if (p == id::l2Oct) { const int o = juce::roundToInt (v); return (o > 0 ? "+" : "") + juce::String (o) + " OCT"; }
+    if (p == id::split)
+    {
+        static const char* n[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+        const int k = juce::roundToInt (v);
+        return juce::String (n[k % 12]) + juce::String (k / 12 - 1);
+    }
+    if (p == id::arpOct) return juce::String (juce::roundToInt (v)) + " OCT";
     return pct (v);
 }
 
@@ -117,6 +169,69 @@ juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
     l.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { id::seqPlay, 1 }, "Song Play/Stop", false));
     l.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { id::seqStop, 1 }, "Song Stop", false));
     l.add (std::make_unique<juce::AudioParameterBool> (juce::ParameterID { id::seqRec, 1 }, "Song Record", false));
+
+    // MODIFICA
+    auto hzRange = [] (float lo, float hi, float centre) { Range r (lo, hi, 1.f); r.setSkewForCentre (centre); return r; };
+    l.add (makeBool (id::editOn, "Edit On", true));
+    l.add (makeFloat (id::felt, "Felt", Range (0.f, 1.f), 0.f));
+    l.add (makeFloat (id::attack, "Soft Attack", Range (0.f, 1.f), 0.f));
+    l.add (makeFloat (id::hpf, "High-Pass", hzRange (20.f, 600.f, 120.f), 20.f));
+    l.add (makeFloat (id::lpf, "Low-Pass", hzRange (1000.f, 20000.f, 5000.f), 20000.f));
+    l.add (makeFloat (id::eqLow, "EQ Low", Range (-12.f, 12.f, .5f), 0.f));
+    l.add (makeFloat (id::eqLMid, "EQ Low-Mid", Range (-12.f, 12.f, .5f), 0.f));
+    l.add (makeFloat (id::eqLMidF, "EQ Low-Mid Freq", hzRange (150.f, 2000.f, 550.f), 500.f));
+    l.add (makeFloat (id::eqHMid, "EQ High-Mid", Range (-12.f, 12.f, .5f), 0.f));
+    l.add (makeFloat (id::eqHMidF, "EQ High-Mid Freq", hzRange (1000.f, 8000.f, 2800.f), 2500.f));
+    l.add (makeFloat (id::eqHigh, "EQ High", Range (-12.f, 12.f, .5f), 0.f));
+    l.add (makeBool (id::compOn, "Compressor", false));
+    l.add (makeFloat (id::compThr, "Comp Threshold", Range (-40.f, 0.f, .5f), -18.f));
+    l.add (makeFloat (id::compRatio, "Comp Ratio", [] { Range r (1.f, 10.f, .1f); r.setSkewForCentre (3.f); return r; }(), 2.5f));
+    l.add (makeFloat (id::compAtt, "Comp Attack", [] { Range r (.5f, 100.f, .1f); r.setSkewForCentre (10.f); return r; }(), 15.f));
+    l.add (makeFloat (id::compRel, "Comp Release", [] { Range r (20.f, 1000.f, 1.f); r.setSkewForCentre (200.f); return r; }(), 200.f));
+    l.add (makeFloat (id::tape, "Tape", Range (0.f, 1.f), 0.f));
+    l.add (makeFloat (id::noise, "Tape Noise", Range (0.f, 1.f), 0.f));
+    l.add (makeFloat (id::trim, "Edit Level", Range (-12.f, 12.f, .5f), 0.f));
+    // SECONDO STRATO
+    l.add (makeBool (id::l2On, "Layer", false));
+    l.add (makeChoice (id::l2Sound, "Layer Sound", layerSoundNames(), 0));
+    l.add (makeFloat (id::l2Vol, "Layer Volume", Range (-40.f, 6.f, .5f), -6.f));
+    l.add (makeFloat (id::l2Oct, "Layer Octave", Range (-2.f, 2.f, 1.f), 0.f));
+    l.add (makeChoice (id::l2Zone, "Layer Zone", juce::StringArray { "WHOLE", "BELOW SPLIT", "ABOVE SPLIT" }, 0));
+    l.add (makeFloat (id::split, "Split Key", Range (24.f, 96.f, 1.f), 60.f));
+    // ARPEGGIATORE
+    l.add (makeBool (id::arpOn, "Arpeggiator", false));
+    l.add (makeChoice (id::arpMode, "Arp Mode", arpModeNames(), 0));
+    l.add (makeChoice (id::arpRate, "Arp Rate", arpRateNames(), 3));
+    l.add (makeFloat (id::arpOct, "Arp Octaves", Range (1.f, 4.f, 1.f), 1.f));
+    l.add (makeFloat (id::arpGate, "Arp Gate", Range (.1f, 1.f), .8f));
+    l.add (makeChoice (id::arpTarget, "Arp Target", juce::StringArray { "BOTH", "PIANO", "LAYER" }, 0));
     return l;
 }
+
+const std::vector<const char*>& soundParams()
+{
+    static const std::vector<const char*> list { id::editOn, id::felt, id::attack, id::hpf, id::lpf, id::eqLow, id::eqLMid, id::eqLMidF, id::eqHMid, id::eqHMidF, id::eqHigh,
+             id::compOn, id::compThr, id::compRatio, id::compAtt, id::compRel, id::tape, id::noise, id::trim,
+             id::l2On, id::l2Sound, id::l2Vol, id::l2Oct, id::l2Zone, id::split,
+             id::arpOn, id::arpMode, id::arpRate, id::arpOct, id::arpGate, id::arpTarget,
+             id::tone, id::width, id::roomOn, id::roomSize, id::roomDamp, id::roomMix };
+    return list;
+}
+
+const juce::StringArray& soundParamIds()
+{
+    static const juce::StringArray ids = [] { juce::StringArray a; for (auto* s : soundParams()) a.add (s); return a; }();
+    return ids;
+}
+
+juce::StringArray layerSoundNames()
+{
+    return { "FELT PIANO", "FM E.PIANO", "TINE E.PIANO", "WARM PAD", "SYNTH PAD", "FM BRASS", "FELT PAD", "SYNTH BASS" };
+}
+juce::StringArray layerSoundNamesIt()
+{
+    return { "Pianoforte con feltro", "Piano elettrico FM", "Piano elettrico a lamelle", "Pad caldo", "Pad sintetico", "Ottoni FM", "Pad di feltro", "Basso sintetico" };
+}
+juce::StringArray arpModeNames() { return { "UP", "DOWN", "UP-DOWN", "RANDOM", "AS PLAYED", "CHORD" }; }
+juce::StringArray arpRateNames() { return { "1/4", "1/8", "1/8T", "1/16", "1/16T", "1/32" }; }
 }

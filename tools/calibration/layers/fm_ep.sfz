@@ -1,0 +1,6 @@
+// FM E.PIANO - Riky Piano Man (originale, oscillatori di sfizz)
+<global> lokey=0 hikey=127 pitch_keycenter=60 ampeg_attack=0.002 ampeg_sustain=0 ampeg_release=0.45 amp_veltrack=80 volume=-4
+<region> sample=*sine ampeg_decay=5
+<region> sample=*sine transpose=12 volume=-17 ampeg_decay=1.6
+<region> sample=*sine transpose=45 tune=-14 volume=-20 ampeg_decay=0.28 amp_veltrack=100 amp_velcurve_64=0.12 amp_velcurve_127=1
+<region> sample=*sine transpose=31 volume=-26 ampeg_decay=0.5 amp_veltrack=100

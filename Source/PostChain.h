@@ -1,6 +1,7 @@
 #pragma once
 #include <juce_audio_basics/juce_audio_basics.h>
 #include <juce_dsp/juce_dsp.h>
+#include "EditChain.h"
 
 namespace riky
 {
@@ -11,6 +12,7 @@ struct PostSettings
     bool roomOn = true;
     float roomSize = .5f, roomDamp = .45f, roomMix = .2f;
     float volumeDb = 0.f;
+    EditSettings edit;                         // suono su misura, prima di tono, larghezza e stanza
 };
 
 // La stessa catena serve al plugin e all'export: così il file esportato suona come il pannello
@@ -34,6 +36,7 @@ private:
     juce::SmoothedValue<float> gain, wet, widthSm;
     juce::AudioBuffer<float> dry;
     float lastPeak = 0.f;
+    EditChain editChain;
     float dcR = .997f, dcX[2] {}, dcY[2] {};   // filtro anti-continua sull'uscita del riverbero
 
     void updateTone (float t);

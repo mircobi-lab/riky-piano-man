@@ -1,0 +1,141 @@
+{
+ "C3DX": {
+  "vals": {
+   "EQLOW": -8.5,
+   "EQLMID": -4.5,
+   "EQLMIDF": 1000,
+   "EQHMID": -3.5,
+   "TAPE": 0.35,
+   "COMP": 1,
+   "COMPTHR": -22,
+   "COMPRATIO": 2,
+   "WIDTH": 1.6,
+   "ROOMMIX": 0.22,
+   "EQHIGH": 10.5,
+   "L2": 1,
+   "L2SOUND": 1,
+   "L2VOL": -6
+  },
+  "err": 2.2331724741365817,
+  "level": -22.498484923150247
+ },
+ "C3PAD": {
+  "vals": {
+   "EQLOW": 1.5,
+   "EQLMID": -6.0,
+   "EQLMIDF": 1000,
+   "EQHMID": -9.0,
+   "TAPE": 0.35,
+   "COMP": 1,
+   "COMPTHR": -22,
+   "COMPRATIO": 2,
+   "WIDTH": 1.0,
+   "ROOMMIX": 0.24,
+   "EQHIGH": -6.5,
+   "L2": 1,
+   "L2SOUND": 3,
+   "L2VOL": -9
+  },
+  "err": 1.9344658261898604,
+  "level": -22.83410972410916
+ },
+ "U1RD": {
+  "vals": {
+   "EQLMID": -0.5,
+   "EQLMIDF": 1000,
+   "EQHIGH": 8.5,
+   "COMP": 1,
+   "COMPTHR": -24,
+   "COMPRATIO": 2.5,
+   "WIDTH": 1.85,
+   "ROOMSIZE": 0.3,
+   "ROOMMIX": 0.16,
+   "EQLOW": 1.5,
+   "EQHMID": -1.0,
+   "L2": 1,
+   "L2SOUND": 2,
+   "L2VOL": -5
+  },
+  "err": 1.1033318217535766,
+  "level": -19.28845991766023
+ },
+ "FELTPAD": {
+  "vals": {
+   "ATTACK": 0.3,
+   "EQLOW": 11.0,
+   "EQLMID": 5.5,
+   "EQLMIDF": 1000,
+   "EQHMID": -12.0,
+   "WIDTH": 1.0,
+   "ROOMSIZE": 0.6,
+   "ROOMMIX": 0.3,
+   "FELT": 0.25,
+   "EQHIGH": -12.0,
+   "L2": 1,
+   "L2SOUND": 6,
+   "L2VOL": -10
+  },
+  "err": 5.273866746495496,
+  "level": -24.806613129533694
+ },
+ "U1FELT": {
+  "vals": {
+   "EQLMID": 8.5,
+   "EQLMIDF": 1000,
+   "EQHIGH": 12.0,
+   "COMP": 1,
+   "COMPTHR": -24,
+   "COMPRATIO": 2.5,
+   "WIDTH": 2.0,
+   "ROOMSIZE": 0.35,
+   "ROOMMIX": 0.18,
+   "EQLOW": 2.5,
+   "EQHMID": -6.0,
+   "L2": 1,
+   "L2SOUND": 0,
+   "L2VOL": -4
+  },
+  "err": 1.3640559734319204,
+  "level": -15.929502489448987
+ },
+ "C3BRASS": {
+  "vals": {
+   "EQLOW": 1.0,
+   "EQLMID": -6.0,
+   "EQLMIDF": 1000,
+   "EQHMID": -2.0,
+   "TAPE": 0.35,
+   "COMP": 1,
+   "COMPTHR": -22,
+   "COMPRATIO": 2,
+   "WIDTH": 1.45,
+   "ROOMMIX": 0.22,
+   "EQHIGH": 3.5,
+   "L2": 1,
+   "L2SOUND": 5,
+   "L2VOL": -8
+  },
+  "err": 1.7427007077680898,
+  "level": -21.714566389909486
+ },
+ "C3FPAD": {
+  "vals": {
+   "EQLOW": 2.0,
+   "EQLMID": -6.0,
+   "EQLMIDF": 1000,
+   "EQHMID": -11.0,
+   "TAPE": 0.35,
+   "COMP": 1,
+   "COMPTHR": -22,
+   "COMPRATIO": 2,
+   "WIDTH": 0.75,
+   "ROOMMIX": 0.24,
+   "EQHIGH": -2.0,
+   "L2": 1,
+   "L2SOUND": 6,
+   "L2VOL": -10
+  },
+  "err": 1.7218015809689875,
+  "level": -22.547196720739663
+ }
+}

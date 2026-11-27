@@ -32,12 +32,14 @@ jobs:
         run: |
           git clone -q https://github.com/sfzinstruments/MatsHelgesson.MaestroConcertGrandPiano maestro
           git -C maestro checkout -q 717078b450eccc4a7733755f4b5973426ebc23e9
-      - name: Prova (intonazione, temperamenti, pedali, rilasci, 88 tasti, PANIC, SFZ CONTROLS, keyswitch, sequencer, export MP3 e WAV)
+      - name: Prova (intonazione, temperamenti, pedali, rilasci, 88 tasti, PANIC, SFZ CONTROLS, keyswitch, sequencer, export, feltro, EQ, compressore, nastro, strato, arpeggio, preset)
         run: ./build/riky_render_artefacts/Release/riky_render "maestro/Maestro Concert Grand.sfz" prova.wav tools/test-instrument/keyswitch-test.sfz export
       - name: Controllo dell'MP3 della demo con ffprobe
         run: |
           ffprobe -v error -show_entries format=duration,bit_rate:format_tags=title -show_entries stream=codec_name,sample_rate,channels -of default=nw=1 export/riky-theme.mp3
           cp export/riky-theme.mp3 RikyPianoMan-demo-Rikys-Theme.mp3
+      - name: I 17 preset sullo stesso passaggio di Riky's Theme, in un MP3
+        run: tools/preset_showcase.sh export/presets RikyPianoMan-preset-Character-Pianos.mp3
       - uses: actions/upload-artifact@v4
         with:
           name: prova-audio
@@ -46,7 +48,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: demo
-          path: RikyPianoMan-demo-Rikys-Theme.mp3
+          path: |
+            RikyPianoMan-demo-Rikys-Theme.mp3
+            RikyPianoMan-preset-Character-Pianos.mp3
 
   mac:
     name: macOS (Intel + Apple Silicon)
@@ -177,8 +181,12 @@ jobs:
             **Accessibilità**: GUIDA-RIKY.txt è la guida da leggere con NVDA o JAWS e la barra braille. Nel programma F1 dice i comandi principali e il campo Comando accetta parole scritte con la tastiera braille.
 
             **Demo**: RikyPianoMan-demo-Rikys-Theme.mp3 è la demo "Riky's Theme" (brano originale) esportata da GitHub con il plugin, MP3 320 kbps.
+
+            **Pagina Modifica del suono e preset** (F3 nel programma): feltro, attacco, EQ a 4 bande, filtri, nastro, compressore, secondo strato con split, arpeggiatore e 17 preset (il Maestro e 16 colori ispirati ai Character Pianos di Yamaha Montage, senza campioni Yamaha). F7 e F8 cambiano preset, anche il Program Change del controller.
+            RikyPianoMan-preset-Character-Pianos.mp3 fa sentire i 17 preset uno dopo l'altro sullo stesso passaggio di Riky's Theme. Come sono stati misurati e tarati: PRESET-CHARACTER-PIANOS.md.
           files: |
             dist/*.exe
             dist/*.zip
             dist/*.mp3
             docs/GUIDA-RIKY.txt
+            docs/PRESET-CHARACTER-PIANOS.md

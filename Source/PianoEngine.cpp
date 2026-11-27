@@ -189,7 +189,53 @@ juce::String PianoEngine::errorText() const { const juce::ScopedLock sl (textLoc
 juce::File PianoEngine::currentFile() const { const juce::ScopedLock sl (textLock); return file; }
 std::shared_ptr<const InstrumentInfo> PianoEngine::info() const { const juce::ScopedLock sl (textLock); return infoPtr; }
 
-void PianoEngine::loadAsync (const juce::File& sfz)
+void PianoEngine::loadAsync (const juce::File& sfz) { startLoad (sfz, {}); }
+void PianoEngine::loadTextAsync (const juce::File& virtualFile, const juce::String& text) { startLoad (virtualFile, text.isEmpty() ? juce::String (" ") : text); }
+
+namespace
+{
+    // testo del file e di quelli inclusi, solo per controllare quali opcode usa lo strumento
+    void gatherText (const juce::File& root, const juce::File& f, juce::String& all, int depth)
+    {
+        if (depth > 8 || ! f.existsAsFile()) return;
+        const auto t = f.loadFileAsString();
+        all << t << "\n";
+        int at = 0;
+        while ((at = t.indexOf (at, "#include")) >= 0)
+        {
+            const int q1 = t.indexOfChar (at, '"'), q2 = q1 >= 0 ? t.indexOfChar (q1 + 1, '"') : -1;
+            if (q1 < 0 || q2 < 0) break;
+            gatherText (root, root.getParentDirectory().getChildFile (t.substring (q1 + 1, q2).replaceCharacter ('\\', '/')), all, depth + 1);
+            at = q2 + 1;
+        }
+    }
+}
+
+juce::String PianoEngine::injectEdit (const juce::String& text, const juce::File& sfz, bool& feltAdded)
+{
+    // Il feltro e l'attacco morbido entrano nello strumento come opcode della sezione <global>, comandati dai CC
+    // interni 300 e 301: un filtro passa-basso per ogni nota che segue la dinamica (come un feltro tra martelletto
+    // e corde) e un attacco più lento. Il file sul disco non viene toccato: sfizz legge il testo modificato.
+    // Il filtro si aggiunge solo se lo strumento non ne usa uno suo (altrimenti verrebbe sostituito).
+    juce::String all;
+    gatherText (sfz, sfz, all, 0);
+    if (all.isEmpty()) all = text;
+    const auto lower = all.toLowerCase();
+    feltAdded = ! lower.contains ("cutoff") && ! lower.contains ("fil_type") && ! lower.contains ("fil1_");
+    juce::String ops = " ampeg_attack_oncc" + juce::String (attackCC) + "=0.25";
+    if (feltAdded)
+        ops << " fil_type=lpf_2p cutoff=20000 fil_veltrack=2400 cutoff_oncc" << feltCC << "=-8400";
+    ops << " ";
+    juce::String out;
+    int at = 0, found = 0;
+    for (int g; (g = text.indexOfIgnoreCase (at, "<global>")) >= 0; at = g + 8, ++found)
+        out << text.substring (at, g + 8) << ops;
+    out << text.substring (at);
+    if (found == 0) out = "<global>" + ops + "\n" + text;
+    return out;
+}
+
+void PianoEngine::startLoad (const juce::File& sfz, const juce::String& text)
 {
     joinLoader();
     const int gen = ++generation;
@@ -198,7 +244,7 @@ void PianoEngine::loadAsync (const juce::File& sfz)
         file = sfz;
     }
     setStatus (Status::loading);
-    loader = std::thread ([this, sfz, gen]
+    loader = std::thread ([this, sfz, text, gen]
     {
         juce::Thread::setCurrentThreadName ("Riky Piano Man loader");
         auto s = std::make_unique<sfz::Sfizz>();
@@ -208,15 +254,24 @@ void PianoEngine::loadAsync (const juce::File& sfz)
         s->setNumVoices (polyVoices.load());
         juce::String err;
         std::shared_ptr<InstrumentInfo> inf;
-        if (! sfz.existsAsFile())
+        const bool builtIn = text.isNotEmpty();
+        bool feltAdded = false;
+        if (! builtIn && ! sfz.existsAsFile())
             err = "FILE NOT FOUND";
-        else if (! s->loadSfzFile (sfz.getFullPathName().toStdString()))
-            err = "CANNOT READ THE SFZ FILE";
-        else if (s->getNumRegions() == 0)
-            err = "NO REGIONS IN THE SFZ FILE";
         else
         {
-            inf = readInfo (*s, sfz);
+            const auto source = builtIn ? text : sfz.loadFileAsString();
+            const auto edited = injectEdit (source, sfz, feltAdded);
+            if (! s->loadSfzString (sfz.getFullPathName().toStdString(), edited.toStdString()))
+                err = "CANNOT READ THE SFZ FILE";
+            else if (s->getNumRegions() == 0)
+                err = "NO REGIONS IN THE SFZ FILE";
+            else
+            {
+                inf = readInfo (*s, sfz);
+                inf->feltAvailable = feltAdded;
+                inf->builtIn = builtIn;
+            }
         }
         finishLoad (err.isEmpty() ? std::move (s) : nullptr, inf, sfz, err, gen, rate);
     });
@@ -286,7 +341,7 @@ void PianoEngine::resetAudioState() noexcept
     seenParam.fill (-1.f);
     cc64 = cc67 = 0;
     sentSustain = sentLid = sentQuality = sentRootKey = -1;
-    sentTuning = -1.f;
+    sentTuning = sentFelt = sentAttack = -1.f;
     sentBpm = -1.0; sentNum = sentDen = -1;
     freewheel = false;
     wasPlaying = false;
@@ -342,7 +397,9 @@ void PianoEngine::render (juce::AudioBuffer<float>& buffer, const juce::MidiBuff
 
     // parametri del pannello verso lo strumento, solo quando cambiano
     if (const float t = s.a4 * std::pow (2.f, s.cents / 1200.f); ! juce::approximatelyEqual (t, sentTuning)) { sy.setTuningFrequency (t); sentTuning = t; }
-    for (int i = 0; i < numSlots; ++i)
+    if (! juce::approximatelyEqual (s.felt, sentFelt)) { sy.hdcc (0, feltCC, s.felt); sentFelt = s.felt; }
+    if (! juce::approximatelyEqual (s.attack, sentAttack)) { sy.hdcc (0, attackCC, s.attack); sentAttack = s.attack; }
+    for (int i = 0; i < numSlots && ! s.slotsFromFile; ++i)
         if (const int cc = slotCC[(size_t) i].load(); cc >= 0 && ! juce::approximatelyEqual (s.slots[(size_t) i], seenParam[(size_t) i]))
         {
             sy.hdcc (0, cc, s.slots[(size_t) i]);

@@ -1,6 +1,6 @@
 /*  Applicazione Standalone di Riky Piano Man con lo stile MBStudio anche per finestra, menu e dialoghi.
     - al primo avvio abilita tutti gli ingressi MIDI collegati (tastiere e controller);
-    - argomenti di prova: --sfz FILE.sfz  --install  --param ID=VALORE  --shot FILE.png  (salva un'immagine del pannello ed esce)        */
+    - argomenti di prova: --sfz FILE.sfz  --install  --param ID=VALORE  --preset N  --page 1  --shot FILE.png  (salva un'immagine del pannello ed esce)        */
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include <juce_audio_plugin_client/juce_audio_plugin_client.h>
@@ -81,6 +81,15 @@ public:
             else if (a == "--a11y") a11yReport = v;
             else if (a == "--profile") proc->midiMap.applyProfile (v.getIntValue());
             else if (a == "--learn") proc->midiMap.setLearnMode (true);
+            else if (a == "--preset") proc->selectPreset (v.getIntValue());
+            else if (a == "--page")   // pagina del pannello (0 pianoforte, 1 modifica), dopo che l'editor esiste
+            {
+                const int pg = v.getIntValue();
+                juce::Timer::callAfterDelay (1500, [this, pg]
+                {
+                    if (auto* ed = dynamic_cast<RikyEditor*> (mainWindow->getAudioProcessor()->getActiveEditor())) ed->getPanel().setPage (pg, false);
+                });
+            }
         }
         if (installing) proc->installPiano();
         if (a11yReport.isNotEmpty())
@@ -146,7 +155,7 @@ public:
             out << "radice: " << root->getTitle() << ", figli " << (int) root->getChildren().size() << "\n";
             walk (*root, 0);
         }
-        else out << "nessun gestore di accessibilità per l'editor\n";
+        else out << "nessun gestore di accessibilita' per l'editor\n";
         out = "elementi: " + juce::String (n) + ", senza nome: " + juce::String (missing) + "\n" + out;
         f.replaceWithText (out);
     }

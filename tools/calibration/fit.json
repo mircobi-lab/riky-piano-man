@@ -1,0 +1,402 @@
+{
+ "Nashville C3": {
+  "lmf": 1000,
+  "diff": [
+   5.3,
+   5.7,
+   4.2,
+   2.2,
+   0.0,
+   -1.4,
+   4.0,
+   1.3
+  ],
+  "lp": null,
+  "gains": [
+   1.5,
+   -3.8,
+   -2.2,
+   -0.3
+  ],
+  "rms_err": 1.09,
+  "corr_video": 0.431,
+  "corr_maestro": 0.794,
+  "side_video": -4.0,
+  "side_maestro": -9.4
+ },
+ "U1 Upright": {
+  "lmf": 1000,
+  "diff": [
+   -6.8,
+   -9.3,
+   -13.6,
+   -4.5,
+   0.0,
+   -8.2,
+   -6.5,
+   -4.3
+  ],
+  "lp": null,
+  "gains": [
+   0.3,
+   10.4,
+   -0.3,
+   2.3
+  ],
+  "rms_err": 2.42,
+  "corr_video": -0.055,
+  "corr_maestro": 0.926,
+  "side_video": 0.5,
+  "side_maestro": -13.9
+ },
+ "Felt Piano": {
+  "lmf": 1000,
+  "diff": [
+   -1.0,
+   1.8,
+   1.0,
+   -5.3,
+   0.0,
+   -13.4,
+   -11.1,
+   -18.1
+  ],
+  "lp": null,
+  "gains": [
+   3.7,
+   6.7,
+   -9.9,
+   -5.9
+  ],
+  "rms_err": 3.29,
+  "corr_video": 0.306,
+  "corr_maestro": 0.814,
+  "side_video": -2.7,
+  "side_maestro": -9.9
+ },
+ "Nashville C3+DX EP": {
+  "lmf": 1000,
+  "diff": [
+   3.8,
+   2.3,
+   1.9,
+   4.0,
+   0.0,
+   -1.9,
+   4.6,
+   18.6
+  ],
+  "lp": null,
+  "gains": [
+   -1.0,
+   -3.6,
+   -2.5,
+   6.3
+  ],
+  "rms_err": 2.26,
+  "corr_video": 0.345,
+  "corr_maestro": 0.834,
+  "side_video": -3.1,
+  "side_maestro": -10.4
+ },
+ "C3 Bright": {
+  "lmf": 1000,
+  "diff": [
+   9.3,
+   4.3,
+   3.1,
+   0.9,
+   0.0,
+   2.1,
+   13.7,
+   12.1
+  ],
+  "lp": null,
+  "gains": [
+   1.0,
+   -6.8,
+   3.3,
+   4.8
+  ],
+  "rms_err": 2.74,
+  "corr_video": 0.395,
+  "corr_maestro": 0.783,
+  "side_video": -3.6,
+  "side_maestro": -9.1
+ },
+ "U1 Upright Bright": {
+  "lmf": 1000,
+  "diff": [
+   2.6,
+   -0.8,
+   2.1,
+   2.9,
+   0.0,
+   -1.7,
+   4.1,
+   11.6
+  ],
+  "lp": null,
+  "gains": [
+   -1.8,
+   -2.4,
+   -1.4,
+   4.2
+  ],
+  "rms_err": 1.82,
+  "corr_video": -0.035,
+  "corr_maestro": 0.841,
+  "side_video": 0.3,
+  "side_maestro": -10.6
+ },
+ "Felt Piano Bright": {
+  "lmf": 1000,
+  "diff": [
+   -1.1,
+   -1.9,
+   -0.8,
+   -3.9,
+   0.0,
+   1.0,
+   -4.3,
+   0.0
+  ],
+  "lp": null,
+  "gains": [
+   0.7,
+   2.4,
+   0.6,
+   -0.1
+  ],
+  "rms_err": 1.57,
+  "corr_video": 0.399,
+  "corr_maestro": 0.872,
+  "side_video": -3.7,
+  "side_maestro": -11.6
+ },
+ "Felt Mono-SP": {
+  "lmf": 1000,
+  "diff": [
+   -9.7,
+   -3.1,
+   -5.4,
+   0.0,
+   0.0,
+   -6.0,
+   -4.3,
+   19.2
+  ],
+  "lp": null,
+  "gains": [
+   -3.5,
+   3.8,
+   -3.9,
+   7.9
+  ],
+  "rms_err": 3.33,
+  "corr_video": 0.957,
+  "corr_maestro": 0.809,
+  "side_video": -16.6,
+  "side_maestro": -9.7
+ },
+ "Nashville C3+SynPad": {
+  "lmf": 250,
+  "diff": [
+   12.0,
+   6.8,
+   8.7,
+   3.9,
+   0.0,
+   -4.3,
+   -0.1,
+   -7.9
+  ],
+  "lp": null,
+  "gains": [
+   6.2,
+   6.5,
+   -3.9,
+   -2.2
+  ],
+  "rms_err": 2.02,
+  "corr_video": 0.333,
+  "corr_maestro": 0.755,
+  "side_video": -3.0,
+  "side_maestro": -8.5
+ },
+ "U1 Upright + Rd EP": {
+  "lmf": 1000,
+  "diff": [
+   5.8,
+   2.1,
+   3.6,
+   1.4,
+   0.0,
+   0.3,
+   0.6,
+   0.0
+  ],
+  "lp": null,
+  "gains": [
+   1.4,
+   -2.1,
+   -1.4,
+   -0.9
+  ],
+  "rms_err": 0.81,
+  "corr_video": 0.287,
+  "corr_maestro": 0.725,
+  "side_video": -2.6,
+  "side_maestro": -8.0
+ },
+ "Felt Piano Pad": {
+  "lmf": 1000,
+  "diff": [
+   7.0,
+   5.3,
+   5.4,
+   4.0,
+   0.0,
+   -10.0,
+   -22.7,
+   -19.6
+  ],
+  "lp": 1000,
+  "gains": [
+   0.7,
+   0.1,
+   -4.0,
+   3.5
+  ],
+  "rms_err": 2.35,
+  "corr_video": 0.463,
+  "corr_maestro": 0.792,
+  "side_video": -4.4,
+  "side_maestro": -9.3
+ },
+ "U1 Upright + Felt": {
+  "lmf": 1000,
+  "diff": [
+   2.6,
+   -2.0,
+   0.8,
+   0.3,
+   0.0,
+   -6.7,
+   -7.3,
+   0.8
+  ],
+  "lp": null,
+  "gains": [
+   1.0,
+   3.2,
+   -6.5,
+   0.1
+  ],
+  "rms_err": 1.52,
+  "corr_video": 0.174,
+  "corr_maestro": 0.824,
+  "side_video": -1.2,
+  "side_maestro": -10.2
+ },
+ "NashC3 + SynFMBrass": {
+  "lmf": 1000,
+  "diff": [
+   13.9,
+   4.1,
+   6.0,
+   3.7,
+   0.0,
+   -0.4,
+   6.1,
+   4.7
+  ],
+  "lp": null,
+  "gains": [
+   2.7,
+   -5.4,
+   -1.8,
+   0.7
+  ],
+  "rms_err": 1.94,
+  "corr_video": 0.296,
+  "corr_maestro": 0.737,
+  "side_video": -2.6,
+  "side_maestro": -8.2
+ },
+ "NashC3 + Felt Pad": {
+  "lmf": 1000,
+  "diff": [
+   8.6,
+   10.3,
+   4.3,
+   8.4,
+   0.0,
+   -5.3,
+   -0.9,
+   1.3
+  ],
+  "lp": null,
+  "gains": [
+   3.4,
+   -3.9,
+   -8.5,
+   -1.7
+  ],
+  "rms_err": 2.25,
+  "corr_video": 0.582,
+  "corr_maestro": 0.755,
+  "side_video": -5.8,
+  "side_maestro": -8.5
+ },
+ "Felt Piano ARP*4": {
+  "lmf": 250,
+  "diff": [
+   1.6,
+   2.6,
+   4.9,
+   1.5,
+   0.0,
+   -3.1,
+   -13.7,
+   -14.5
+  ],
+  "lp": 2200,
+  "gains": [
+   0.2,
+   2.7,
+   -2.3,
+   1.8
+  ],
+  "rms_err": 2.0,
+  "corr_video": 0.442,
+  "corr_maestro": 0.829,
+  "side_video": -4.1,
+  "side_maestro": -10.3
+ },
+ "C3 Ballad ARP": {
+  "lmf": 700,
+  "diff": [
+   15.9,
+   -1.2,
+   -1.1,
+   2.0,
+   0.0,
+   -9.3,
+   -6.7,
+   6.9
+  ],
+  "lp": null,
+  "gains": [
+   6.1,
+   4.3,
+   -7.3,
+   2.7
+  ],
+  "rms_err": 3.23,
+  "corr_video": 0.615,
+  "corr_maestro": 0.625,
+  "side_video": -6.2,
+  "side_maestro": -6.3
+ }
+}

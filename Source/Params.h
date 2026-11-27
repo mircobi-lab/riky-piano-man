@@ -41,7 +41,50 @@ namespace id
     inline constexpr const char* seqPlay   = "SEQPLAY";
     inline constexpr const char* seqStop   = "SEQSTOP";
     inline constexpr const char* seqRec    = "SEQREC";
+    // MODIFICA: suono su misura (strato dello strumento ed effetti, uguali nel plugin e negli export)
+    inline constexpr const char* editOn    = "EDIT";      // tutta la sezione accesa o esclusa
+    inline constexpr const char* felt      = "FELT";      // feltro: filtro per ogni nota che segue la dinamica
+    inline constexpr const char* attack    = "ATTACK";    // attacco ammorbidito
+    inline constexpr const char* hpf       = "HPF";       // passa-alto (Hz)
+    inline constexpr const char* lpf       = "LPF";       // passa-basso (Hz)
+    inline constexpr const char* eqLow     = "EQLOW";     // scaffale basso 120 Hz (dB)
+    inline constexpr const char* eqLMid    = "EQLMID";    // medio-basso (dB)
+    inline constexpr const char* eqLMidF   = "EQLMIDF";   // frequenza medio-basso (Hz)
+    inline constexpr const char* eqHMid    = "EQHMID";    // medio-alto (dB)
+    inline constexpr const char* eqHMidF   = "EQHMIDF";   // frequenza medio-alto (Hz)
+    inline constexpr const char* eqHigh    = "EQHIGH";    // scaffale alto 6 kHz (dB)
+    inline constexpr const char* compOn    = "COMP";
+    inline constexpr const char* compThr   = "COMPTHR";   // soglia (dB)
+    inline constexpr const char* compRatio = "COMPRATIO";
+    inline constexpr const char* compAtt   = "COMPATT";   // ms
+    inline constexpr const char* compRel   = "COMPREL";   // ms
+    inline constexpr const char* tape      = "TAPE";      // saturazione tipo nastro
+    inline constexpr const char* noise     = "NOISE";     // fruscio del nastro, segue il suono
+    inline constexpr const char* trim      = "TRIM";      // livello del suono su misura (dB)
+    // SECONDO STRATO
+    inline constexpr const char* l2On      = "L2";
+    inline constexpr const char* l2Sound   = "L2SOUND";
+    inline constexpr const char* l2Vol     = "L2VOL";     // dB
+    inline constexpr const char* l2Oct     = "L2OCT";     // ottave
+    inline constexpr const char* l2Zone    = "L2ZONE";    // tutta la tastiera / sotto lo split / sopra lo split
+    inline constexpr const char* split     = "SPLIT";     // nota di divisione (la nota appartiene alla zona alta)
+    // ARPEGGIATORE
+    inline constexpr const char* arpOn     = "ARP";
+    inline constexpr const char* arpMode   = "ARPMODE";
+    inline constexpr const char* arpRate   = "ARPRATE";
+    inline constexpr const char* arpOct    = "ARPOCT";
+    inline constexpr const char* arpGate   = "ARPGATE";
+    inline constexpr const char* arpTarget = "ARPTARGET"; // entrambi / pianoforte / secondo strato
 }
+
+// parametri che un preset del suono su misura imposta (gli altri, come volume, accordatura e sequencer, restano)
+const std::vector<const char*>& soundParams();
+const juce::StringArray& soundParamIds();
+juce::StringArray layerSoundNames();      // nomi visivi
+juce::StringArray layerSoundNamesIt();    // nomi per il lettore di schermo
+juce::StringArray arpModeNames();
+juce::StringArray arpRateNames();
+inline double arpRateBeats (int i) { static const double r[] = { 1.0, .5, 1.0 / 3.0, .25, 1.0 / 6.0, .125 }; return r[juce::jlimit (0, 5, i)]; }
 
 inline constexpr int numSlots = 8;
 // CC dei pedali: li gestisce la sezione PEDAL e non finiscono negli SFZ CONTROLS

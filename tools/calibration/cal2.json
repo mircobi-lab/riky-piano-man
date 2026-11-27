@@ -1,0 +1,50 @@
+{
+ "FELT": {
+  "vals": {
+   "ATTACK": 0.3,
+   "EQLOW": 7.0,
+   "EQLMID": 8.5,
+   "EQLMIDF": 1000,
+   "EQHMID": -12.0,
+   "WIDTH": 1.8,
+   "ROOMSIZE": 0.6,
+   "ROOMMIX": 0.28,
+   "FELT": 0.25,
+   "EQHIGH": -4.0
+  },
+  "err": 3.0940723631919784,
+  "level": -23.420176633430888
+ },
+ "FELTB": {
+  "vals": {
+   "ATTACK": 0.2,
+   "EQLMID": -0.5,
+   "EQLMIDF": 1000,
+   "WIDTH": 1.5,
+   "ROOMSIZE": 0.6,
+   "ROOMMIX": 0.26,
+   "FELT": 0.15,
+   "EQLOW": 2.5,
+   "EQHMID": 0.0,
+   "EQHIGH": -0.5
+  },
+  "err": 1.5342557547069977,
+  "level": -27.12844074514571
+ },
+ "MONO": {
+  "vals": {
+   "ATTACK": 0.3,
+   "EQLOW": -6.0,
+   "EQLMID": 4.0,
+   "EQLMIDF": 1000,
+   "EQHMID": -6.5,
+   "WIDTH": 0,
+   "ROOMMIX": 0.14,
+   "FELT": 0.3,
+   "NOISE": 0.95,
+   "EQHIGH": 8.0
+  },
+  "err": 2.3407476672808736,
+  "level": -24.868683232057748
+ }
+}

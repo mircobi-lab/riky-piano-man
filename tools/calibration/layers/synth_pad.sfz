@@ -1,0 +1,6 @@
+// SYNTH PAD - Riky Piano Man (originale, oscillatori di sfizz)
+<global> lokey=0 hikey=127 pitch_keycenter=60 ampeg_attack=0.45 ampeg_sustain=100 ampeg_release=1.3 amp_veltrack=50 fil_type=lpf_2p cutoff=2400 resonance=2 fillfo_freq=0.22 fillfo_depth=700 volume=-17
+<region> sample=*saw tune=-12 pan=-60
+<region> sample=*saw tune=12 pan=60
+<region> sample=*saw transpose=12 tune=3 volume=-8
+<region> sample=*square transpose=-12 volume=-10

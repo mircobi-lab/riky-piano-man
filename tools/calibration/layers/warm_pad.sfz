@@ -1,0 +1,5 @@
+// WARM PAD - Riky Piano Man (originale, oscillatori di sfizz)
+<global> lokey=0 hikey=127 pitch_keycenter=60 ampeg_attack=0.9 ampeg_sustain=100 ampeg_release=1.8 amp_veltrack=40 fil_type=lpf_2p cutoff=950 resonance=1 fil_veltrack=1200 fillfo_freq=0.15 fillfo_depth=300 volume=-15
+<region> sample=*saw tune=-8 pan=-45
+<region> sample=*saw tune=8 pan=45
+<region> sample=*triangle volume=-8

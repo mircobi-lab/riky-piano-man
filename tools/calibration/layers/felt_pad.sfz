@@ -1,0 +1,5 @@
+// FELT PAD - Riky Piano Man (originale, oscillatori di sfizz)
+<global> lokey=0 hikey=127 pitch_keycenter=60 ampeg_attack=0.35 ampeg_sustain=100 ampeg_release=2.2 amp_veltrack=35 fil_type=lpf_2p cutoff=650 fil_veltrack=900 amplfo_freq=0.3 amplfo_depth=0.8 volume=-10
+<region> sample=*triangle tune=-4 pan=-30
+<region> sample=*triangle tune=4 pan=30
+<region> sample=*sine transpose=12 volume=-12

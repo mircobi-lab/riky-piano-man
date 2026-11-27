@@ -5,6 +5,7 @@ namespace riky
 void PostChain::prepare (double sampleRate, int maxBlock, const PostSettings& s)
 {
     sr = sampleRate;
+    editChain.prepare (sampleRate, maxBlock);
     const int block = juce::jmax (maxBlock, 32);
     const juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32) block, 1 };
     for (int c = 0; c < 2; ++c)
@@ -47,6 +48,9 @@ void PostChain::process (juce::AudioBuffer<float>& buffer, const PostSettings& s
 {
     const int n = buffer.getNumSamples();
     const int chans = juce::jmin (2, buffer.getNumChannels());
+
+    // suono su misura
+    editChain.process (buffer, s.edit);
 
     // tono
     if (! juce::exactlyEqual (s.tone, appliedTone)) updateTone (s.tone);

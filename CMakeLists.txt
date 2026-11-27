@@ -137,7 +137,8 @@ juce_add_plugin(RikyPianoMan
 include(MBStudioUI/MBStudioUI.cmake)
 mbstudio_ui_add(RikyPianoMan)
 
-set(RIKY_ENGINE_SOURCES Source/Params.cpp Source/PianoEngine.cpp Source/PostChain.cpp Source/Sequencer.cpp Source/Exporter.cpp Source/Cues.cpp)
+set(RIKY_ENGINE_SOURCES Source/Params.cpp Source/PianoEngine.cpp Source/PostChain.cpp Source/EditChain.cpp Source/Sequencer.cpp Source/Exporter.cpp Source/Cues.cpp
+    Source/Voicing.cpp Source/LayerSounds.cpp Source/Presets.cpp Source/JobBuilder.cpp)
 target_sources(RikyPianoMan PRIVATE
     ${RIKY_ENGINE_SOURCES}
     Source/SampleLibrary.cpp

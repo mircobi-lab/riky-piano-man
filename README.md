@@ -41,6 +41,28 @@ I file restano identici agli originali, compreso `mcgreadme.txt` con le note del
 | TUNING | Temperamenti storici con tonica a scelta: equabile, Werckmeister III, Vallotti, Kirnberger III, mesotonico 1/4 di comma, pitagorico, naturale. Le barre mostrano lo scarto di ogni nota dall'equabile |
 | ARTICULATION | I keyswitch del file (`sw_last`, `sw_label`) come pulsanti; il keyswitch attivo si accende anche sulla tastiera |
 
+Il pannello ha due pagine: PIANO (quella descritta qui sopra) ed EDIT SOUND, con i pulsanti sotto il marchio o con F3.
+
+## Pagina EDIT SOUND: suono su misura e preset
+
+![Pagina EDIT SOUND](docs/pannello-modifica.png)
+
+| Sezione | Controlli |
+|---|---|
+| PRESET | Menu con 17 preset di fabbrica e quelli salvati, precedente e successivo (F7, F8), SAVE, EDIT ON (esclude tutta la pagina per il confronto). Gli stessi preset sono i programmi dell'host e rispondono al Program Change MIDI |
+| PIANO | FELT: un passa-basso su ogni nota che segue la dinamica, aggiunto dentro lo strumento SFZ (CC interni 300 e 301, il file sul disco resta com'è). ATTACK: attacco più lento |
+| EQ | LOW (scaffale a 120 Hz), LO-MID e HI-MID con la loro frequenza, HIGH (scaffale a 6 kHz), ±12 dB |
+| FILTER | HPF 20–600 Hz e LPF 1–20 kHz, spenti agli estremi |
+| TAPE | Saturazione asimmetrica a guadagno unitario sui segnali piccoli, rigonfiamento a 80 Hz e acuti più morbidi; NOISE è un fruscio che segue il suono e sparisce nel silenzio |
+| LEVEL | Livello dopo le modifiche: i preset lo usano per suonare forti come il Maestro |
+| COMPRESSOR | Soglia, rapporto, attacco, rilascio, ginocchio morbido e compensazione automatica |
+| LAYER | Secondo strato con un suono interno (piano elettrico FM, piano elettrico a lamelle, pad caldo, pad sintetico, ottoni FM, pad di feltro, basso sintetico) o il pianoforte stesso con il feltro; volume, ottava, zona (tutta la tastiera, sotto o sopra lo split) e nota di split |
+| ARPEGGIATOR | Su, giù, su e giù, casuale, come suonate, accordo; da 1/4 a 1/32 con terzine, 1–4 ottave, gate; su entrambi gli strati o su uno solo. Va al tempo del sequencer o dell'host |
+
+I preset imitano il colore delle 16 Performance "Character Pianos" di Yamaha Montage partendo dal Maestro, senza campioni Yamaha. Sono stati misurati sul video dimostrativo e tarati esportando dal plugin: metodo, numeri e limiti sono in [docs/PRESET-CHARACTER-PIANOS.md](docs/PRESET-CHARACTER-PIANOS.md), gli script in `tools/calibration`. In ogni release `RikyPianoMan-preset-Character-Pianos.mp3` fa sentire i 17 preset sullo stesso passaggio di "Riky's Theme".
+
+Tutto quello che si sente nella pagina finisce anche negli export: la catena e l'arpeggio sono gli stessi. Il sequencer registra le note suonate prima dell'arpeggio, così un brano registrato con l'arpeggio si riascolta uguale.
+
 La tastiera si adatta allo strumento: i tasti che non suonano sono grigi, i keyswitch ambra. Il display mostra regioni, campioni, voci, ultima nota (con il nome del tasto se il file lo dichiara) e articolazione.
 
 ## Accessibilità: pensato per Riky, che non vede
@@ -52,16 +74,18 @@ Riky usa Windows con lettore di schermo e una barra braille Humanware Brailliant
 - **Scorciatoie con Ctrl** su Windows (Comando sul Mac) e finestra Audio e MIDI con Ctrl virgola o con il comando `audio`. La guida completa, scritta per essere letta riga per riga, è [docs/GUIDA-RIKY.txt](docs/GUIDA-RIKY.txt); il pulsante HELP (o F1) la apre e legge a voce l'elenco dei comandi.
 
 - **Nomi e aiuti in italiano** per ogni controllo, con valori detti per esteso ("meno 3 decibel", "100 battiti al minuto", "più 2 semitoni"). I controlli dello strumento prendono il nome scritto nel file SFZ.
-- **Gruppi e ordine di Tab** pensati per l'uso: stato del pianoforte, sequencer, suono, pedali, controlli dello strumento, articolazioni, stanza, uscita, motore, accordatura, controller MIDI. All'apertura il fuoco è sul display dello stato, che si legge come testo; anche lo stato del brano è un testo che si legge con Tab.
+- **Gruppi e ordine di Tab** pensati per l'uso: stato del pianoforte, pagine, sequencer, poi i gruppi della pagina aperta (pianoforte: suono, pedali, controlli dello strumento, articolazioni, stanza, uscita, motore, accordatura; modifica: preset, feltro e attacco, equalizzatore, filtri, nastro, livello, compressore, secondo strato, arpeggiatore), controller MIDI. All'apertura il fuoco è sul display dello stato, che si legge come testo; anche lo stato del brano è un testo che si legge con Tab.
 - **Annunci parlati** di quello che cambia: pianoforte pronto, download ogni 10%, riproduzione, conteggio, registrazione, fine della registrazione con numero di note e durata, export ogni 25% e alla fine con nome del file e picco, articolazioni, assegnazioni MIDI.
 - **Scorciatoie**: spazio o F5 suona e ferma, R o F6 registra, S ferma, D demo, Esc panic, I o F2 legge lo stato, M metronomo, C conteggio, più e meno il tempo (Pagina su e giù di dieci), Comando O apri MIDI, Comando S salva, Comando E esporta subito in MP3 senza finestre, Comando Maiuscole E in WAV, Comando L libreria, Comando M assegna al controller MIDI il controllo che ha il fuoco.
 - **Segnali sonori** che non servono lo schermo: due note che salgono quando la registrazione parte, due che scendono quando finisce, tre quando l'export è pronto, due gravi per un errore. Conteggio e metronomo a click, il primo della battuta più acuto. Non finiscono nelle registrazioni né negli export.
-- **Barra braille** (Riky usa una Humanware Brailliant BI 40X a 40 celle): testi brevi con l'informazione nelle prime celle ("Pronto: Maestro Concert Grand", "Suona 0:12 di 1:34, Riky's Theme") e un **campo Comando** in cui si scrive con la tastiera braille: `suona`, `ferma`, `registra`, `demo`, `esporta`, `stato`, `tempo 90`, `metronomo`, `conteggio 1`, `volume -6`, `trasponi 2`, `accorda 10`, `diapason 432`, `panic`, `guida`, `aiuto`.
+- **Barra braille** (Riky usa una Humanware Brailliant BI 40X a 40 celle): testi brevi con l'informazione nelle prime celle ("Pronto: Maestro Concert Grand", "Suona 0:12 di 1:34, Riky's Theme") e un **campo Comando** in cui si scrive con la tastiera braille: `suona`, `ferma`, `registra`, `demo`, `esporta`, `stato`, `tempo 90`, `metronomo`, `conteggio 1`, `volume -6`, `trasponi 2`, `accorda 10`, `diapason 432`, `panic`, `guida`, `aiuto`, e per il suono `preset 4`, `preset felt`, `elenco`, `modifica`, `feltro 40`, `nastro 30`, `strato si`, `arpeggio si`, `split 60`, `salva preset nome`.
 - **Trasporto dal controller MIDI**: PLAY, STOP e REC funzionano con i tasti MMC (MIDI Machine Control) dei controller che li hanno, oppure si assegnano a qualsiasi tasto con Comando M sul pulsante.
 - **Finestre del sistema** per conferme e file, che i lettori di schermo conoscono già; pulsanti che non si spengono e LED che non lampeggiano, per non far perdere il fuoco o riempire di annunci.
 - Disposizione: il sequencer è subito sotto il display, dove si usa di più; per chi aiuta guardando lo schermo il controllo con il fuoco ha un bordo blu.
 
-La prova `--a11y` dell'app autonoma scrive l'albero di accessibilità come lo vede un lettore di schermo (58 elementi, tutti con un nome).
+- **Preset** con F7 e F8 o con il Program Change del controller: il nome viene detto con una frase che descrive il suono, e "modificato" se un controllo è stato cambiato.
+
+La prova `--a11y` dell'app autonoma scrive l'albero di accessibilità come lo vede un lettore di schermo (pagina pianoforte e pagina modifica, 73 elementi nella seconda, tutti con un nome).
 
 ## Sequencer: demo, registrazione, export
 
@@ -97,6 +121,8 @@ Un clic sul display apre il menu: cartella dei campioni, readme dell'autore, ric
 - sfizz: licenza BSD a 2 clausole, © sfizz contributors. Con una correzione (`cmake/patch-sfizz.cmake`) per il render fuori tempo reale: sfizz 1.2.3 non aspettava i file ancora in coda e ogni tanto la prima parte di una nota esportata restava muta (5 caricamenti su 108 nella prova, nessuno su 108 dopo la correzione).
 - LAME 3.100: licenza LGPL 2, © The LAME Project (codifica MP3).
 - Demo "Riky's Theme": brano originale scritto per Riky Piano Man, stessa licenza del progetto.
+- Suoni del secondo strato: strumenti SFZ originali scritti per Riky Piano Man (oscillatori di sfizz), stessa licenza del progetto.
+- Preset Character Pianos: imitazioni del colore, nessun campione Yamaha. Yamaha, Montage e MODX sono marchi di Yamaha Corporation; i nomi delle Performance servono solo a dire quale suono si imita.
 - JUCE: licenza AGPL v3.
 - Font Bebas Neue e Antonio: SIL Open Font License (cartella `MBStudioUI/fonts`).
 - Campioni: © Mats Helgesson 2003, tutti i diritti riservati. Il set è gratuito e **non si può vendere**, né modificare e ridistribuire senza il permesso scritto dell'autore. Per questo il plugin non li contiene e li scarica invariati dalla fonte ufficiale. Strumento SFZ derivato da [sfzinstruments/MatsHelgesson.MaestroConcertGrandPiano](https://github.com/sfzinstruments/MatsHelgesson.MaestroConcertGrandPiano), conversione di kinwie pubblicata con il permesso dell'autore.

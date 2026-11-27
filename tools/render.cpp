@@ -4,8 +4,14 @@
 #include "Sequencer.h"
 #include "Exporter.h"
 #include "Cues.h"
+#include "JobBuilder.h"
+#include "Presets.h"
+#include "Voicing.h"
+#include "EditChain.h"
+#include "LayerSounds.h"
 #include <BinaryData.h>
 #include <juce_audio_formats/juce_audio_formats.h>
+#include <juce_dsp/juce_dsp.h>
 #include <cmath>
 #include <cstdio>
 
@@ -97,10 +103,109 @@ juce::MidiMessage off (int n) { return juce::MidiMessage::noteOff (1, n); }
 juce::MidiMessage cc (int c, int v) { return juce::MidiMessage::controllerEvent (1, c, v); }
 }
 
+// processore minimo con gli stessi parametri del plugin: per i preset e per l'export dalla riga di comando
+struct ParamHost : juce::AudioProcessor
+{
+    ParamHost() : AudioProcessor (BusesProperties().withOutput ("Out", juce::AudioChannelSet::stereo(), true)), state (*this, nullptr, "RIKYPIANOMAN", createLayout()) {}
+    const juce::String getName() const override { return "host"; }
+    void prepareToPlay (double, int) override {}
+    void releaseResources() override {}
+    void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override {}
+    double getTailLengthSeconds() const override { return 0; }
+    bool acceptsMidi() const override { return true; }
+    bool producesMidi() const override { return false; }
+    juce::AudioProcessorEditor* createEditor() override { return nullptr; }
+    bool hasEditor() const override { return false; }
+    int getNumPrograms() override { return 1; }
+    int getCurrentProgram() override { return 0; }
+    void setCurrentProgram (int) override {}
+    const juce::String getProgramName (int) override { return {}; }
+    void changeProgramName (int, const juce::String&) override {}
+    void getStateInformation (juce::MemoryBlock&) override {}
+    void setStateInformation (const void*, int) override {}
+    // SFZ CONTROLS ai valori scritti nel file, come fa il plugin quando carica uno strumento
+    void slotsFrom (const InstrumentInfo* inf)
+    {
+        if (inf == nullptr) return;
+        for (int i = 0; i < (int) inf->controls.size(); ++i)
+            if (auto* p = state.getParameter (id::sfzSlot (i))) p->setValueNotifyingHost (inf->controls[(size_t) i].defaultValue);
+    }
+    void set (const juce::String& pid, float value)
+    {
+        if (auto* p = dynamic_cast<juce::RangedAudioParameter*> (state.getParameter (pid))) p->setValueNotifyingHost (p->convertTo0to1 (value));
+        else std::printf ("parametro sconosciuto: %s\n", pid.toRawUTF8());
+    }
+    juce::AudioProcessorValueTreeState state;
+};
+
+// export di un file MIDI con un preset e parametri a scelta (taratura dei preset)
+int renderMidi (const juce::File& sfz, const juce::File& mid, const juce::File& out, const juce::StringArray& args)
+{
+    ParamHost host;
+    {
+        PianoEngine probe;
+        probe.prepare (44100.0, 512);
+        probe.loadAsync (sfz);
+        for (int i = 0; i < 600 && probe.status() == PianoEngine::Status::loading; ++i) juce::Thread::sleep (50);
+        host.slotsFrom (probe.info().get());
+    }
+    for (auto& a : args)
+    {
+        if (a.startsWith ("preset=")) presets::apply (host.state, a.fromFirstOccurrenceOf ("=", false, false).getIntValue());
+        else if (a.contains ("=")) host.set (a.upToFirstOccurrenceOf ("=", false, false), a.fromFirstOccurrenceOf ("=", false, false).getFloatValue());
+    }
+    juce::FileInputStream in (mid);
+    std::vector<SeqEvent> ev;
+    if (! in.openedOk() || ! Sequencer::readMidi (in, ev) || ev.empty()) { std::printf ("MIDI non leggibile\n"); return 2; }
+    auto j = buildJob (host.state, sfz);
+    j.events = ev;
+    j.dest = out;
+    j.title = "taratura";
+    if (juce::SystemStats::getEnvironmentVariable ("RIKY_DEBUG", {}).isNotEmpty())
+        std::printf ("strato %d  guadagno %.3f  testo %d  file %s  arp %d\n", (int) j.voices.layerOn, j.layerGain, j.layerText.length(), j.layerSfz.getFullPathName().toRawUTF8(), (int) j.voices.arpOn);
+    j.format = Exporter::Format::wav24;
+    const auto r = Exporter::renderNow (j, [] (float) { return true; });
+    std::printf ("%s  picco %.1f dBFS  %.1f s\n", r.text.toRawUTF8(), r.peakDb, r.seconds);
+    return r.ok ? 0 : 1;
+}
+
 int main (int argc, char** argv)
 {
     if (argc < 3) { std::printf ("uso: riky_render file.sfz uscita.wav\n"); return 2; }
     juce::ScopedJuceInitialiser_GUI init;
+    if (argc >= 3 && juce::String (argv[1]) == "--layer")
+    {
+        // diagnostica: un file SFZ nel motore, accordo di 1,5 s, picco
+        Rig l;
+        l.s.offline = juce::SystemStats::getEnvironmentVariable ("RT", "0") != "1";
+        l.s.slotsFromFile = true;
+        l.engine.prepare (sr, block);
+        l.engine.loadAsync (juce::File::getCurrentWorkingDirectory().getChildFile (argv[2]));
+        for (int k = 0; k < 200 && l.engine.status() == PianoEngine::Status::loading; ++k) juce::Thread::sleep (20);
+        if (auto in = l.engine.info())
+        {
+            std::printf ("regioni %d, keys %d, switch %d, controlli:", in->regions, (int) in->keys.count(), (int) in->switches.count());
+            for (auto& c : in->controls) std::printf (" cc%d=%.2f", c.cc, c.defaultValue);
+            std::printf ("\n");
+        }
+        auto b = l.play (2.0, { { .0, on (60, 100) }, { .0, on (64, 100) }, { .0, on (67, 100) }, { 1.5, off (60) }, { 1.5, off (64) }, { 1.5, off (67) } });
+        {
+            juce::WavAudioFormat wf;
+            juce::File wav ("/tmp/layer.wav"); wav.deleteFile();
+            std::unique_ptr<juce::OutputStream> os (wav.createOutputStream().release());
+            if (auto w = wf.createWriterFor (os, juce::AudioFormatWriterOptions().withSampleRate (sr).withNumChannels (2).withBitsPerSample (24)))
+                w->writeFromAudioSampleBuffer (b, 0, b.getNumSamples());
+        }
+        std::printf ("%s picco %.1f dBFS (%s)\n", argv[2], juce::Decibels::gainToDecibels (b.getMagnitude (0, b.getNumSamples()), -150.f), l.engine.errorText().toRawUTF8());
+        return 0;
+    }
+    if (argc >= 5 && juce::String (argv[2]) == "--render")
+    {
+        juce::StringArray rest;
+        for (int i = 5; i < argc; ++i) rest.add (argv[i]);
+        const auto cwd = juce::File::getCurrentWorkingDirectory();
+        return renderMidi (cwd.getChildFile (argv[1]), cwd.getChildFile (argv[3]), cwd.getChildFile (argv[4]), rest);
+    }
     if (juce::String (argv[1]).endsWith ("keyswitch-test.sfz") && juce::String (argv[2]) == "loop")
     {
         // diagnostica: carica lo strumento di prova tante volte e misura la prima articolazione
@@ -502,6 +607,188 @@ int main (int argc, char** argv)
                 check (std::abs ((double) mb.getSize() - expected) / expected < .03, "dimensione coerente con 320 kbps");
             }
         }
+    }
+
+    // 16. suono su misura: feltro e attacco nello strumento
+    {
+        auto hfRatio = [] (const juce::AudioBuffer<float>& b, double from, double)
+        {
+            // energia sopra 2,5 kHz rispetto al totale, FFT su 8192 campioni con finestra di Hann
+            constexpr int order = 13, size = 1 << order;
+            juce::dsp::FFT fft (order);
+            std::vector<float> d ((size_t) size * 2, 0.f);
+            const int a = (int) (from * sr);
+            for (int i = 0; i < size && a + i < b.getNumSamples(); ++i)
+                d[(size_t) i] = b.getSample (0, a + i) * (.5f - .5f * std::cos (2.f * juce::MathConstants<float>::pi * (float) i / (size - 1)));
+            fft.performFrequencyOnlyForwardTransform (d.data());
+            double tot = 0, hi = 0;
+            for (int k = 1; k < size / 2; ++k) { const double e = (double) d[(size_t) k] * d[(size_t) k]; tot += e; if (k * sr / size > 2500.0) hi += e; }
+            return (float) (10.0 * std::log10 (juce::jmax (1e-20, hi / juce::jmax (1e-20, tot))));
+        };
+        r.s.felt = 0.f; r.s.attack = 0.f; r.s.transpose = 0; r.s.cents = 0.f; r.s.a4 = 440.f; r.s.pedalButton = false;   // controlli dello strumento come nel file
+        auto plain = r.play (1.0, { { .0, on (72, 90) }, { .9, off (72) } });
+        r.s.felt = .7f;
+        auto felted = r.play (1.0, { { .0, on (72, 90) }, { .9, off (72) } });
+        const auto inf2 = r.engine.info();
+        check (inf2 != nullptr && inf2->feltAvailable, "feltro aggiunto al Maestro (il file non ha filtri suoi)");
+        const float dHf = hfRatio (felted, .05, .6) - hfRatio (plain, .05, .6);
+        check (dHf < -8.f, "FELT 70%: acuti giù di " + juce::String (-dHf, 1) + " dB");
+        r.s.felt = .7f;
+        auto soft = r.play (1.0, { { .0, on (72, 30) }, { .9, off (72) } });
+        auto loud = r.play (1.0, { { .0, on (72, 120) }, { .9, off (72) } });
+        check (hfRatio (loud, .05, .6) - hfRatio (soft, .05, .6) > 3.f, "il feltro segue la dinamica: forte più chiaro di piano");
+        r.s.felt = 0.f; r.s.attack = 1.f;
+        auto slow = r.play (1.0, { { .0, on (72, 100) }, { .9, off (72) } });
+        r.s.attack = 0.f;
+        check (rms (slow, .0, .02) < rms (plain, .0, .02) * .3f && rms (slow, .4, .6) > rms (plain, .4, .6) * .5f,
+               "ATTACK: inizio morbido (" + juce::String (juce::Decibels::gainToDecibels (rms (slow, .0, .02) / rms (plain, .0, .02)), 1) + " dB nei primi 20 ms), poi suona");
+    }
+    // 17. catena di modifica: filtri, EQ, compressore, nastro, fruscio
+    {
+        auto sine = [] (double f, float amp, double secs)
+        {
+            juce::AudioBuffer<float> b (2, (int) (secs * sr));
+            for (int i = 0; i < b.getNumSamples(); ++i) { const float x = amp * (float) std::sin (2 * juce::MathConstants<double>::pi * f * i / sr); b.setSample (0, i, x); b.setSample (1, i, x); }
+            return b;
+        };
+        auto run = [] (juce::AudioBuffer<float> b, const EditSettings& e)
+        {
+            EditChain ch; ch.prepare (sr, block);
+            for (int pos = 0; pos < b.getNumSamples(); pos += block)
+            {
+                juce::AudioBuffer<float> v (b.getArrayOfWritePointers(), 2, pos, juce::jmin (block, b.getNumSamples() - pos));
+                ch.process (v, e);
+            }
+            return b;
+        };
+        auto lvl = [] (const juce::AudioBuffer<float>& b, double a, double z) { return juce::Decibels::gainToDecibels (rms (b, a, z), -150.f); };
+        EditSettings e;
+        const auto s100 = sine (100, .3f, 1.0), s1k = sine (1000, .3f, 1.0), s8k = sine (8000, .3f, 1.0);
+        const float ref100 = lvl (s100, .5, 1), ref1k = lvl (s1k, .5, 1), ref8k = lvl (s8k, .5, 1);
+        check (std::abs (lvl (run (s1k, e), .5, 1) - ref1k) < .01f, "sezione MODIFICA neutra: nessun cambiamento");
+        e.hpf = 300.f;
+        check (lvl (run (s100, e), .5, 1) - ref100 < -15.f, "passa-alto 300 Hz toglie i 100 Hz");
+        e = {}; e.lpf = 2000.f;
+        check (lvl (run (s8k, e), .5, 1) - ref8k < -20.f, "passa-basso 2 kHz toglie gli 8 kHz");
+        e = {}; e.eqLow = 6.f;
+        const float dLow = lvl (run (sine (40, .3f, 1.0), e), .5, 1) - lvl (sine (40, .3f, 1.0), .5, 1);
+        check (std::abs (dLow - 6.f) < .5f, "EQ LOW +6 dB: " + juce::String (dLow, 2) + " dB a 40 Hz");
+        e = {}; e.eqLMid = -6.f; e.eqLMidF = 1000.f;
+        check (std::abs (lvl (run (s1k, e), .5, 1) - ref1k + 6.f) < .3f, "EQ LOW-MID -6 dB a 1 kHz");
+        e = {}; e.eqHMid = 4.f; e.eqHMidF = 2500.f;
+        check (std::abs (lvl (run (sine (2500, .3f, 1.0), e), .5, 1) - lvl (sine (2500, .3f, 1.0), .5, 1) - 4.f) < .3f, "EQ HIGH-MID +4 dB a 2,5 kHz");
+        e = {}; e.eqHigh = -6.f;
+        check (std::abs (lvl (run (sine (15000, .3f, 1.0), e), .5, 1) - lvl (sine (15000, .3f, 1.0), .5, 1) + 6.f) < .7f, "EQ HIGH -6 dB a 15 kHz");
+        e = {}; e.compOn = true; e.compThr = -30.f; e.compRatio = 4.f;
+        const float loudIn = lvl (sine (1000, .5f, 1.0), .5, 1), quietIn = lvl (sine (1000, .01f, 1.0), .5, 1);
+        const float loudOut = lvl (run (sine (1000, .5f, 1.0), e), .5, 1), quietOut = lvl (run (sine (1000, .01f, 1.0), e), .5, 1);
+        check ((loudOut - quietOut) < (loudIn - quietIn) - 10.f, "compressore: la differenza tra forte e piano scende da "
+               + juce::String (loudIn - quietIn, 1) + " a " + juce::String (loudOut - quietOut, 1) + " dB");
+        e = {}; e.tape = 1.f;
+        const float tSmall = lvl (run (sine (1000, .02f, 1.0), e), .5, 1) - lvl (sine (1000, .02f, 1.0), .5, 1);
+        const float tBig = lvl (run (sine (1000, .9f, 1.0), e), .5, 1) - lvl (sine (1000, .9f, 1.0), .5, 1);
+        check (std::abs (tSmall) < 1.f && tBig < -2.f, "nastro: segnali piccoli quasi uguali (" + juce::String (tSmall, 1) + " dB), picchi compressi (" + juce::String (tBig, 1) + " dB)");
+        e = {}; e.noise = 1.f;
+        juce::AudioBuffer<float> sil (2, (int) sr); sil.clear();
+        check (rms (run (sil, e), 0, 1) == 0.f, "fruscio: nel silenzio resta silenzio (la coda degli export finisce)");
+        auto withNoise = run (s1k, e);
+        juce::AudioBuffer<float> diff (2, s1k.getNumSamples());
+        for (int c = 0; c < 2; ++c) { diff.copyFrom (c, 0, withNoise, c, 0, diff.getNumSamples()); diff.addFrom (c, 0, s1k, c, 0, diff.getNumSamples(), -1.f); }
+        const float nl = lvl (diff, .5, 1);
+        check (nl > -60.f && nl < -40.f, "fruscio con il suono: " + juce::String (nl, 1) + " dBFS");
+        e = {}; e.trimDb = -6.f;
+        check (std::abs (lvl (run (s1k, e), .5, 1) - ref1k + 6.f) < .1f, "livello -6 dB");
+    }
+    // 18a. suoni interni del secondo strato: si caricano e suonano a un livello sensato
+    {
+        int good = 0;
+        juce::String levels;
+        for (int i = 1; i < layerSoundNames().size(); ++i)
+        {
+            Rig l;
+            l.s.offline = true;
+            l.s.slotsFromFile = true;
+            l.engine.prepare (sr, block);
+            l.engine.loadTextAsync (juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("layer.sfz"), layerSfzText (i));
+            for (int k = 0; k < 200 && l.engine.status() == PianoEngine::Status::loading; ++k) juce::Thread::sleep (20);
+            auto b = l.play (2.0, { { .0, on (60, 100) }, { .0, on (64, 100) }, { .0, on (67, 100) }, { 1.5, off (60) }, { 1.5, off (64) }, { 1.5, off (67) } });
+            const float pk = juce::Decibels::gainToDecibels (b.getMagnitude (0, b.getNumSamples()), -150.f);
+            levels << layerSoundNames()[i] << " " << juce::String (pk, 1) << "  ";
+            if (l.engine.status() == PianoEngine::Status::ready && pk > -50.f && pk < -1.f && finite (b)) ++good;
+        }
+        check (good == layerSoundNames().size() - 1, "suoni interni del secondo strato: " + levels);
+    }
+    // 18. secondo strato e arpeggiatore: smistamento delle note
+    {
+        auto count = [] (const juce::MidiBuffer& b, bool ons) { int k = 0; for (const auto m : b) if (ons ? m.getMessage().isNoteOn() : m.getMessage().isNoteOff()) ++k; return k; };
+        Voicing vo; vo.prepare (sr);
+        VoiceSettings v; v.layerOn = true; v.zone = 1; v.split = 60;
+        juce::MidiBuffer in, a, b;
+        in.addEvent (on (48, 100), 0); in.addEvent (on (72, 100), 10);
+        vo.process (in, block, v, a, b);
+        check (count (a, true) == 1 && count (b, true) == 1 && (*a.begin()).getMessage().getNoteNumber() == 72 && (*b.begin()).getMessage().getNoteNumber() == 48,
+               "split a C4: C3 al secondo strato, C5 al pianoforte");
+        in.clear(); a.clear(); b.clear();
+        v.split = 40;   // cambia lo split con i tasti giù: gli stacchi vanno dove erano andate le note
+        in.addEvent (off (48), 0); in.addEvent (off (72), 0);
+        vo.process (in, block, v, a, b);
+        check (count (a, false) == 1 && count (b, false) == 1, "stacchi coerenti anche se lo split cambia");
+
+        Voicing arp; arp.prepare (sr);
+        VoiceSettings va; va.arpOn = true; va.arpRate = 3; va.bpm = 120.0; va.arpMode = 0; va.arpGate = .5f;
+        int ons = 0, offs = 0; std::vector<int> notes;
+        const int total = (int) (sr / block) * block;   // poco meno di 1 s: a 120 BPM in sedicesimi sono 8 passi
+        for (int pos = 0; pos < total; pos += block)
+        {
+            juce::MidiBuffer i2, m1, m2;
+            if (pos == 0) { i2.addEvent (on (60, 90), 0); i2.addEvent (on (64, 90), 0); i2.addEvent (on (67, 90), 0); }
+            arp.process (i2, block, va, m1, m2);
+            for (const auto m : m1) { if (m.getMessage().isNoteOn()) { ++ons; notes.push_back (m.getMessage().getNoteNumber()); } else if (m.getMessage().isNoteOff()) ++offs; }
+        }
+        check (ons == 8 && notes.size() >= 4 && notes[0] == 60 && notes[1] == 64 && notes[2] == 67 && notes[3] == 60,
+               "arpeggio su, sedicesimi a 120 BPM: " + juce::String (ons) + " note in 1 s (attese 8), ordine Do Mi Sol Do");
+        check (offs >= 7, "arpeggio: ogni nota si stacca col gate");
+        juce::MidiBuffer i3, m3, m4;
+        i3.addEvent (off (60), 0); i3.addEvent (off (64), 0); i3.addEvent (off (67), 0);
+        arp.process (i3, (int) (sr * .3), va, m3, m4);
+        check (count (m3, true) == 0, "tasti lasciati: l'arpeggio si ferma");
+    }
+    // 19. preset di fabbrica: export di una frase con ognuno (secondo strato e arpeggio compresi)
+    if (argc > 4)
+    {
+        const juce::File outDir = juce::File::getCurrentWorkingDirectory().getChildFile (argv[4]).getChildFile ("presets");
+        outDir.createDirectory();
+        // i primi 12 secondi di "Riky's Theme", poi tutto rilasciato: così ogni preset si ascolta su musica vera
+        std::vector<SeqEvent> phrase;
+        auto add = [&] (double t, juce::MidiMessage m) { SeqEvent e; e.time = t; e.msg = m; phrase.push_back (e); };
+        for (auto& e : demo) if (e.time < 12.0) phrase.push_back (e);
+        add (12.0, cc (64, 0));
+        for (int k = 21; k <= 108; ++k) add (12.0, off (k));
+        std::sort (phrase.begin(), phrase.end(), [] (auto& x, auto& y) { return x.time < y.time; });
+        const int n = (int) presets::factory().size();
+        check (n == 17, "17 preset di fabbrica (Maestro e 16 Character Pianos)");
+        int okCount = 0;
+        for (int i = 0; i < n; ++i)
+        {
+            ParamHost host;
+            host.slotsFrom (r.engine.info().get());
+            presets::apply (host.state, i);
+            auto j = buildJob (host.state, r.engine.currentFile());
+            j.events = phrase;
+            j.dest = outDir.getChildFile (juce::String (i).paddedLeft ('0', 2) + " " + juce::File::createLegalFileName (presets::name (i)) + ".wav");
+            j.format = Exporter::Format::wav24;
+            const auto res = Exporter::renderNow (j, [] (float) { return true; });
+            const bool good = res.ok && res.peakDb < -.1f && res.peakDb > -40.f;
+            okCount += good ? 1 : 0;
+            if (! good) check (false, "preset " + presets::name (i) + ": " + res.text + " picco " + juce::String (res.peakDb, 1));
+        }
+        check (okCount == n, "export con tutti i preset, nessun clip (" + juce::String (okCount) + " su " + juce::String (n) + ")");
+        // un preset riporta i parametri del suono ai valori iniziali prima dei suoi
+        ParamHost host;
+        presets::apply (host.state, 3);
+        presets::apply (host.state, 0);
+        check (host.state.getRawParameterValue (id::felt)->load() == 0.f && host.state.getRawParameterValue (id::width)->load() == 1.f,
+               "MAESTRO dopo FELT PIANO: feltro tolto, larghezza al 100%");
     }
 
     check (finite (r.out), "nessun NaN o infinito");

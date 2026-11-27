@@ -7,8 +7,13 @@
 #include "Exporter.h"
 #include "PostChain.h"
 #include "Cues.h"
+#include "Voicing.h"
+#include "Presets.h"
+#include "LayerSounds.h"
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <juce_dsp/juce_dsp.h>
+#include <map>
+#include <cstring>
 
 class RikyProcessor : public juce::AudioProcessor, private juce::Timer, private juce::AudioProcessorValueTreeState::Listener
 {
@@ -31,10 +36,11 @@ public:
     bool isMidiEffect() const override { return false; }
     double getTailLengthSeconds() const override { return 8.0; }
 
-    int getNumPrograms() override { return 1; }
-    int getCurrentProgram() override { return 0; }
-    void setCurrentProgram (int) override {}
-    const juce::String getProgramName (int) override { return {}; }
+    // programmi dell'host = preset del suono su misura (fabbrica e utente)
+    int getNumPrograms() override { return juce::jmax (1, riky::presets::count()); }
+    int getCurrentProgram() override { return currentPreset.load(); }
+    void setCurrentProgram (int index) override { selectPreset (index); }
+    const juce::String getProgramName (int index) override { return riky::presets::name (index); }
     void changeProgramName (int, const juce::String&) override {}
 
     void getStateInformation (juce::MemoryBlock&) override;
@@ -53,6 +59,10 @@ public:
     std::function<void()> showAudioSettings;         // solo nell'app autonoma: finestra Audio e MIDI
     bool exportSong (const juce::File& dest, riky::Exporter::Format);   // render offline del brano del sequencer
     void installPiano() { library.startInstall(); }
+    bool selectPreset (int index);                   // applica un preset e lo ricorda
+    juce::File saveUserPreset (const juce::String& name);
+    std::atomic<int> currentPreset { 0 }, programRequest { -1 };   // program change dal MIDI: preset scelto nel timer
+    bool presetEdited() const noexcept { return edited.load(); }   // un parametro del suono è cambiato dopo il preset
 
     float outputLevel() const noexcept { return level.load(); }
     void requestPanic() noexcept { engine.requestPanic(); }
@@ -61,6 +71,7 @@ public:
     juce::MidiKeyboardState keyboardState;
     mbstudio::midi::MidiMapper midiMap;
     riky::PianoEngine engine;
+    riky::PianoEngine layer;                         // secondo strato: suono interno o pianoforte con feltro
     riky::SampleLibrary library;
     riky::Sequencer sequencer;
     riky::Exporter exporter;
@@ -84,6 +95,20 @@ private:
     std::atomic<int> transportRequests { 0 };     // 1 play/stop, 2 stop, 4 rec (da MIDI, thread audio)
     std::atomic<float>* tempo = nullptr, *metro = nullptr, *countIn = nullptr, *cuesOn = nullptr;
     void engineChanged();
+    void updateLayer();                              // carica il suono del secondo strato quando serve
+    riky::VoiceSettings voiceSettings (bool hostPlaying, double bpm, double ppq) const;
+    riky::EngineSettings layerSettings (const riky::EngineSettings& main) const;
+    riky::Voicing voicing;
+    juce::AudioBuffer<float> layerBuf;
+    juce::MidiBuffer mainMidi, layerMidi;
+    juce::SmoothedValue<float> layerGain;
+    int layerLoaded = -2;                            // suono caricato nel secondo strato (-2 nessuno)
+    juce::String layerFor;                           // file del pianoforte per cui è caricato il "pianoforte con feltro"
+    std::atomic<bool> edited { false }, applyingPreset { false };
+    // chiave confrontata come testo (strcmp): nessuna allocazione nel thread audio
+    struct CStrLess { bool operator() (const char* a, const char* b) const noexcept { return std::strcmp (a, b) < 0; } };
+    std::map<const char*, std::atomic<float>*, CStrLess> soundP;   // parametri della sezione MODIFICA
+    float pv (const char* pid) const { return soundP.at (pid)->load(); }
 
     void notify();
     riky::EngineSettings engineSettings() const;

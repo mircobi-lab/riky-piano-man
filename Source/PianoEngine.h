@@ -25,6 +25,8 @@ struct EngineSettings
     std::array<float, numSlots> slots {};   // SFZ CONTROLS 0..1
     int quality = 4;               // qualità di ricampionamento dal vivo (sfizz 0..10)
     int temperKey = 0;             // tonica del temperamento (0 = Do)
+    float felt = 0.f, attack = 0.f;  // MODIFICA: feltro e attacco morbido, sui CC interni 300 e 301
+    bool slotsFromFile = false;      // secondo strato: i controlli dello strumento restano ai valori del file
     bool offline = false;          // bounce o render non in tempo reale: aspetta i campioni dal disco e usa la qualità massima
     // trasporto dell'host, per gli SFZ che usano tempo e posizione (LFO e inviluppi a tempo)
     bool hasTransport = false, playing = false;
@@ -44,6 +46,8 @@ struct InstrumentInfo
     int defaultSwitch = -1;
     std::vector<Control> controls;                      // CC con label_cc, pedali esclusi, al massimo 8
     juce::String image;                                 // immagine dichiarata nel file (<control> image)
+    bool feltAvailable = false;                         // filtro del feltro aggiunto (il file non ha filtri suoi)
+    bool builtIn = false;                               // strumento interno di Riky Piano Man (secondo strato)
 };
 
 // Motore: sfizz (BSD-2) suona il file SFZ com'è, con regioni di rilascio, keyswitch, round robin, CC,
@@ -60,6 +64,11 @@ public:
     // thread dei messaggi
     void prepare (double sampleRate, int maxBlock);
     void loadAsync (const juce::File& sfz);
+    // strumento scritto nel programma: 'virtualFile' serve solo per il nome e per i percorsi relativi
+    void loadTextAsync (const juce::File& virtualFile, const juce::String& sfzText);
+    // CC interni (sopra i 127, così non si scontrano con quelli dello strumento)
+    static constexpr int feltCC = 300, attackCC = 301;
+    static juce::String injectEdit (const juce::String& text, const juce::File& sfz, bool& feltAdded);
     void unload();
     void setPolyphony (int voices);
     void setTemperament (int index);
@@ -111,7 +120,7 @@ private:
     std::array<int, 128> playedAs {};        // nota suonata per ogni tasto premuto (la trasposizione può cambiare nel frattempo)
     std::array<float, numSlots> seenParam {};
     int cc64 = 0, cc67 = 0, sentSustain = -1, sentLid = -1, sentQuality = -1, sentRootKey = -1;
-    float sentTuning = -1;
+    float sentTuning = -1, sentFelt = -1, sentAttack = -1;
     bool freewheel = false, wasPlaying = false;
     double sentBpm = -1;
     int sentNum = -1, sentDen = -1;
@@ -122,6 +131,7 @@ private:
     void joinLoader();
     void resetAudioState() noexcept;
     static std::shared_ptr<InstrumentInfo> readInfo (sfz::Sfizz&, const juce::File&);
+    void startLoad (const juce::File& sfz, const juce::String& text);
     static void applyTemperament (sfz::Sfizz&, int index);
 };
 }
