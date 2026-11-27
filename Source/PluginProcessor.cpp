@@ -427,6 +427,16 @@ void RikyProcessor::setStateInformation (const void* data, int size)
     st.removeProperty ("song", nullptr);
     applyingPreset.store (true);
     state.replaceState (st);
+    // replaceState salta un parametro se il valore salvato è uguale a quello attuale arrotondato: un interruttore
+    // lasciato dall'host a 0,4 (che vale "spento") resterebbe a 0,4. Qui ogni parametro torna esattamente come salvato.
+    for (auto* ap : getParameters())
+        if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (ap))
+        {
+            const auto child = st.getChildWithProperty ("id", rp->getParameterID());
+            if (! child.isValid() || ! child.hasProperty ("value")) continue;
+            const float target = rp->convertTo0to1 ((float) child.getProperty ("value"));
+            if (std::abs (rp->getValue() - target) > 1.0e-6f) rp->setValueNotifyingHost (target);
+        }
     applyingPreset.store (false);
     currentPreset.store ((int) st.getProperty ("preset", 0));
     edited.store ((bool) st.getProperty ("presetEdited", false));
